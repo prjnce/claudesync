@@ -31,3 +31,7 @@ Lát cắt dọc đầu tiên: session tạo trên máy giả lập A xuất hi�
 - [ ] Kill ở mọi bước rồi chạy lại → không có file hỏng, không object trùng (journal).
 - [ ] Mỗi session ID chỉ có đúng một file trong `projects/*/` trên mọi máy (**A5**).
 - [ ] Hai `run` song song → lần thứ 2 thoát ngay với exit 5.
+
+## Comments
+
+**2026-10-05 — Claude (từ #13):** Trên máy Windows này, lần đọc đầu tiên một file vừa ghi mất ~1,7 s/MB (antivirus/EDR, Defender đang tắt); awk chỉ ~0,05 s/MB. Cài và công bố phải xử lý theo luồng: tải → `gzip -d` → localize → (`tee` sang sha256/đếm dòng) → ghi `*.csync-tmp` đúng một lần → `mv`. Không ghi file trung gian rồi đọc lại; `cs_transform_verify` (đọc lại cả 2 file) chỉ dùng trong test hoặc cho file nhỏ — cần bản kiểm tra theo luồng. Xem SPEC §25 R2.

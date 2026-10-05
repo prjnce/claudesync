@@ -30,3 +30,14 @@ Hàm thuần theo từng dòng, chuyển transcript giữa dạng local và dạ
 - [ ] Root lồng nhau khác nhau giữa 2 máy (kịch bản **P5**).
 - [ ] Prefix-preserving: transform(prefix của file) == prefix của transform(file).
 - [ ] Hiệu năng trên Git Bash: file 60 MB ≤ ~3 s.
+
+## Comments
+
+**2026-10-05 — Claude:** Đã làm xong, chờ duyệt.
+- `lib/transform.awk` (phát triển từ `docs/prototypes/xf.awk`): ngữ cảnh key (`cwd`, `relocatedCwd`, `trackingPath`, `realParentDir`, key của `trackedFileBackups`), root dài nhất thắng, scope `P`/`R`/`A` (`realParentDir` chỉ dùng `{R:}`; `{MEM:}`, `{CFG}/plans` dùng cho mọi key), khớp không phân biệt hoa/thường cho path Windows và `/mnt/<x>`, path tương đối chỉ đổi dấu phân cách; bảng root qua `ENVIRON`.
+- `lib/transform.sh`: `cs_json_escape`, `cs_transform_row`, `cs_transform`, `cs_transform_file` (có OFFSET để chỉ chuyển phần đuôi, giữ nguyên việc thiếu newline cuối), `cs_complete_len`, `cs_transcript_stats`, `cs_transform_verify`.
+- **Khác SPEC §7.2:** "mọi dòng phải parse được" đổi thành "transform không làm hỏng thêm": số dòng, số CR và số dòng không parse được phải giống nhau trước/sau. Lý do: chính Claude có thể để lại dòng bị cắt giữa file (§4.4).
+- Dữ liệu thật (file native 27 MB, 12.168 dòng): canonicalize 1,5 s; 10.881 `{P:}`, 1.627 `{R:}`, 156 `{MEM:}`, 36 `{CFG}`; vòng Windows → chuẩn → Linux → chuẩn ổn định; verify đạt. File legacy (JSON có dấu cách) không bị đụng tới — phải repair trước (#15).
+- Phát hiện: đọc lần đầu một file vừa ghi mất ~1,7 s/MB (antivirus) → ghi vào SPEC §25 R2 và #17.
+- Bẫy: `RT` là biến có sẵn của gawk — không dùng làm tên mảng.
+- 18 test mới; toàn bộ 108/108 pass trên 3 cấu hình (gồm so byte mawk vs gawk trong WSL).
