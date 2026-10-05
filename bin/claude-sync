@@ -30,27 +30,6 @@ cs_use() {
   done
 }
 
-# cs_human_bytes N -> 1.2 MB style.
-cs_human_bytes() {
-  "$CS_AWK" -v b="$1" 'BEGIN { split("B KB MB GB TB", u, " "); i = 1; while (b >= 1024 && i < 5) { b /= 1024; i++ } printf (i == 1 ? "%d %s\n" : "%.1f %s\n"), b, u[i] }'
-}
-
-cmd_projects() {
-  local sub=${1:-list}
-  case $sub in
-    list)
-      cs_use platform claude
-      local slug n bytes cwd
-      printf '%s %s %s %s\n' "$(cs_pad "$(cs_t projects.col_sessions)" 8)" "$(cs_pad "$(cs_t projects.col_size)" 10)" \
-        "$(cs_pad "$(cs_t projects.col_cwd)" 50)" "$(cs_t projects.col_dir)"
-      while IFS=$'\t' read -r slug n bytes cwd; do
-        [[ -n $slug ]] || continue
-        printf '%s %s %s %s\n' "$(cs_pad "$n" 8)" "$(cs_pad "$(cs_human_bytes "$bytes")" 10)" "$(cs_pad "$cwd" 50)" "$slug"
-      done < <(cs_claude_projects_report)
-      ;;
-    *) cs_die_t "$CS_EXIT_ERROR" cli.not_implemented "projects $sub" ;;
-  esac
-}
 
 # doctor_line TAG KEY [ARGS...]: "  TAG   message" (tags stay untranslated).
 doctor_line() {
@@ -173,6 +152,8 @@ main() {
       ;;
     projects)
       cs_bootstrap
+      cs_use platform version store claude transform projects ui cmd_projects
+      cs_store_init
       cmd_projects "$@"
       ;;
     login)

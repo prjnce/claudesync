@@ -27,3 +27,11 @@ Spec: SPEC §6, §16 bước 8, §20 (`projects`)
 - [ ] Test: URL không parse được (path local, `file://`) → bỏ qua, không băm chuỗi thô; thư mục không phải git → mảng rỗng.
 - [ ] Test grep: sau khi chạy với URL có token giả, chuỗi token không xuất hiện ở bất kỳ file nào trong `~/.claude-sync/`.
 - [ ] `projects list` trên máy này liệt kê TransFlow và claude_sync với số session đúng.
+
+## Comments
+
+**2026-10-05 — Claude:** Đã làm xong, chờ duyệt.
+- `lib/projects.sh`: dạng path native (`cs_native_path`, `cs_path_under` theo ranh giới, không phân biệt hoa/thường cho Windows và `/mnt/<x>`), `remote_keys` (§6.2 — chuẩn hoá bỏ userinfo/token/cổng/`.git`, băm sha256; URL thô không bao giờ ra khỏi biến cục bộ), gốc project = git toplevel của thư mục khởi chạy, `cwd_root` theo đúng cách viết Claude dùng trong transcript (P2), thư mục memory theo main worktree + tên đang có trên đĩa (Claude dùng `d--…` hoặc `D--…` tuỳ cách mở) + `autoMemoryDirectory`, `cs_project_map/unmap/set_enabled/of_cwd` (root dài nhất thắng), `cs_project_rows` cho transform.
+- `lib/cmd_projects.sh`: `projects list` (đã map + thư mục có session chưa map), `select` (chọn tương tác; hai thư mục khác nhau cùng tên không bao giờ bị gộp), `map`, `unmap`, `mode`, `exclude`, `include`, `dirs` (bản báo cáo thô cũ).
+- Chạy thật trên máy này: thấy 3 nhóm chưa map — `/mnt/d/Projects/TransFlow` (12 session legacy), `d:\Projects\TransFlow` (3), `d:\Projects\claude_sync` (2). Chậm (~20 s) vì đọc mọi transcript để lấy cwd khởi chạy → engine (#17) cần cache `launch` theo (size, mtime).
+- 14 test; toàn bộ pass trên 3 cấu hình; shellcheck sạch.

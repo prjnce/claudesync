@@ -249,7 +249,7 @@ make_tree() {
 
 @test "projects list prints a table" {
   make_tree
-  run cli projects list
+  run cli projects dirs
   [ "$status" -eq 0 ]
   [[ ${lines[0]} == SESSIONS* ]]
   [[ $output == *"/home/u/y"* ]]

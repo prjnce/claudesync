@@ -33,6 +33,11 @@ cs_confirm() {
   esac
 }
 
+# cs_human_bytes N -> "1.2 MB" style.
+cs_human_bytes() {
+  "${CS_AWK:-awk}" -v b="${1:-0}" 'BEGIN { split("B KB MB GB TB", u, " "); i = 1; while (b >= 1024 && i < 5) { b /= 1024; i++ } printf (i == 1 ? "%d %s\n" : "%.1f %s\n"), b, u[i] }'
+}
+
 # cs_heading KEY [ARGS...]: a step title.
 cs_heading() {
   printf '\n== %s ==\n' "$(cs_t "$@")"
