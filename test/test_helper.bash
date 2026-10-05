@@ -8,7 +8,22 @@ cs_test_setup() {
   export HOME="$BATS_TEST_TMPDIR/home"
   export CLAUDE_SYNC_HOME="$HOME/.claude-sync"
   mkdir -p "$HOME"
-  unset CS_CORE_LOADED CS_TEST_EXTRA_TOOLS CS_VERBOSE
+  unset CS_CORE_LOADED CS_PLATFORM_LOADED CS_TEST_EXTRA_TOOLS CS_VERBOSE
+}
+
+# cs_load MODULE...: bootstrap core, then source lib/<MODULE>.sh for each MODULE.
+cs_load() {
+  cs_load_core
+  local m
+  for m in "$@"; do
+    # shellcheck source=/dev/null
+    source "$CS_ROOT/lib/$m.sh"
+  done
+}
+
+# cs_is_windows: rc 0 under Git Bash.
+cs_is_windows() {
+  [[ $OSTYPE == msys* || $OSTYPE == cygwin* ]]
 }
 
 # cs_load_core: source lib/core.sh into the test shell and bootstrap it.
