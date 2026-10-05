@@ -1,0 +1,9 @@
+# Resolve `source` relative to the sourcing script.
+source-path=SCRIPTDIR
+external-sources=true
+# lib/*.sh are sourced libraries: their globals are consumed by other files.
+disable=SC2034
+# awk programs are deliberately single-quoted; ENVIRON carries the data.
+disable=SC2016
+# Functions invoked indirectly (job runner, traps).
+disable=SC2317

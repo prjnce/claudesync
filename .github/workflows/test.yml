@@ -1,0 +1,36 @@
+name: test
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: ubuntu-gawk, os: ubuntu-latest, awk: gawk }
+          - { name: ubuntu-mawk, os: ubuntu-latest, awk: mawk } # Ubuntu Desktop ships only mawk
+          - { name: windows-git-bash, os: windows-latest, awk: gawk }
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    env:
+      CS_AWK: ${{ matrix.awk }}
+    defaults:
+      run:
+        shell: bash # Windows: Git for Windows bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install mawk
+        if: matrix.awk == 'mawk'
+        run: sudo apt-get install -y mawk
+      - name: Tool versions
+        run: |
+          echo "$BASH_VERSION"
+          command -v "$CS_AWK"
+          jq --version
+      - name: shellcheck
+        if: matrix.name == 'ubuntu-gawk'
+        run: shellcheck -x bin/claude-sync lib/*.sh test/*.bash test/run-all.sh
+      - name: bats
+        run: test/vendor/bats-core/bin/bats test

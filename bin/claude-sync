@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# claude-sync entrypoint. Command surface: docs/SPEC.md §20.
+set -Eeuo pipefail
+if ! (( BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 4) )); then
+  printf 'claude-sync: bash >= 4.4 required (have %s)\n' "$BASH_VERSION" >&2
+  exit 1
+fi
+shopt -s inherit_errexit
+
+cs_src=${BASH_SOURCE[0]}
+case $cs_src in
+  */*) cs_bin_dir=${cs_src%/*} ;;
+  *) cs_bin_dir=. ;;
+esac
+CS_APP_DIR=$(cd -- "$cs_bin_dir/.." && pwd -P)
+unset cs_src cs_bin_dir
+
+# shellcheck source=lib/core.sh
+source "$CS_APP_DIR/lib/core.sh"
+
+cs_usage() {
+  cat <<'EOF'
+usage: claude-sync <command> [args]
+
+  setup                         full setup wizard (re-runnable)
+  login [--device] | logout     sign in to / revoke Google Drive access
+  folder [show]                 root folder, marker, machines
+  projects ...                  list|select|pending|map|unmap|mode|exclude
+  sync [--pull-only|--push-only] [--project X] [--dry-run] [--verbose]
+  run [--trigger=...]           one non-interactive cycle (used by the service)
+  status [--json]               health, last/next run, behind, conflicts, waiting maps
+  conflicts [list|show <sid>]   forked sessions, losing memory/plan copies
+  restore <sid>                 reinstall a session removed by retention
+  repair [--dry-run]            fix legacy data (CRLF, spaced JSON, foreign cwd, duplicates)
+  service install|uninstall|status|kick
+  hooks install|uninstall
+  config get|set <key> <value>
+  machines [list|forget <name>]
+  claude [args...]              pull, then exec claude
+  doctor                        check dependencies and installation
+  logs [-f]
+  uninstall [--purge]
+  --version | help
+EOF
+}
+
+main() {
+  case ${1:-help} in
+    --version | version)
+      printf 'claude-sync %s\n' "$CS_VERSION"
+      return 0
+      ;;
+    -h | --help | help)
+      cs_usage
+      return 0
+      ;;
+  esac
+
+  local cmd=$1
+  shift
+  case $cmd in
+    setup | login | logout | folder | projects | sync | run | status | conflicts | restore | repair | \
+      service | hooks | config | machines | claude | doctor | logs | uninstall | kick)
+      cs_bootstrap
+      cs_die "$CS_EXIT_ERROR" "'$cmd' is not implemented yet"
+      ;;
+    *)
+      printf 'claude-sync: unknown command: %s\n\n' "$cmd" >&2
+      cs_usage >&2
+      return "$CS_EXIT_USAGE"
+      ;;
+  esac
+}
+
+main "$@"
