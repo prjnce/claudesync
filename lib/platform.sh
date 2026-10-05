@@ -160,10 +160,12 @@ cs_pid_alive() {
 }
 
 # cs_proc_start_ids PID...: "pid<TAB>start id" for each running pid, in the encoding Claude Code stores
-# in sessions/<pid>.json procStart. Windows: creation time as FILETIME (UTC); Linux: ps lstart in UTC.
+# in sessions/<pid>.json procStart. Windows: creation time as FILETIME (UTC); Linux: field 22 of
+# /proc/<pid>/stat (starttime in clock ticks since boot) — verified against live WSL records.
 cs_proc_start_ids() {
   (($#)) || return 0
-  local p s IFS=' '
+  local p st IFS=' '
+  local -a f
   if cs_is_msys; then
     CS_PIDS="$*" cs_ps procstart '
 foreach ($id in ($env:CS_PIDS -split " ")) {
@@ -172,9 +174,11 @@ foreach ($id in ($env:CS_PIDS -split " ")) {
 }'
   else
     for p in "$@"; do
-      s=$(LC_ALL=C TZ=UTC ps -o lstart= -p "$p" 2>/dev/null) || continue
-      s=${s#"${s%%[![:space:]]*}"}
-      printf '%s\t%s\n' "$p" "${s%"${s##*[![:space:]]}"}"
+      [[ $p =~ ^[0-9]+$ ]] || continue
+      { IFS= read -r st <"/proc/$p/stat"; } 2>/dev/null || continue
+      # comm (field 2) may contain spaces and ')': split after the last ')'; field 22 is then f[19].
+      read -r -a f <<<"${st##*) }"
+      printf '%s\t%s\n' "$p" "${f[19]}"
     done
   fi
 }

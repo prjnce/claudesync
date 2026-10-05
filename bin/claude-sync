@@ -44,6 +44,69 @@ usage: claude-sync <command> [args]
 EOF
 }
 
+cs_use() {
+  local m
+  for m in "$@"; do
+    # shellcheck source=/dev/null
+    source "$CS_APP_DIR/lib/$m.sh"
+  done
+}
+
+# cs_human_bytes N -> 1.2 MB style.
+cs_human_bytes() {
+  "$CS_AWK" -v b="$1" 'BEGIN { split("B KB MB GB TB", u, " "); i = 1; while (b >= 1024 && i < 5) { b /= 1024; i++ } printf (i == 1 ? "%d %s\n" : "%.1f %s\n"), b, u[i] }'
+}
+
+cmd_projects() {
+  local sub=${1:-list}
+  case $sub in
+    list)
+      cs_use platform claude
+      local slug n bytes cwd
+      printf '%-8s %-10s %-50s %s\n' SESSIONS SIZE 'LAUNCH CWD (newest session)' 'PROJECT DIR'
+      while IFS=$'\t' read -r slug n bytes cwd; do
+        [[ -n $slug ]] || continue
+        printf '%-8s %-10s %-50s %s\n' "$n" "$(cs_human_bytes "$bytes")" "$cwd" "$slug"
+      done < <(cs_claude_projects_report)
+      ;;
+    *) cs_die "$CS_EXIT_ERROR" "'projects $sub' is not implemented yet" ;;
+  esac
+}
+
+cmd_doctor() {
+  cs_use platform claude
+  local problems=0 dir scan n dirs junk dups
+  printf 'claude-sync %s doctor\n' "$CS_VERSION"
+  printf '  OK    bash %s, awk %s, os %s%s\n' "$BASH_VERSION" "$CS_AWK" "$CS_OS" "$( ((CS_WSL)) && printf ' (WSL)')"
+  dir=$(cs_claude_dir)
+  if [[ -d $dir ]]; then
+    printf '  OK    Claude config dir: %s\n' "$dir"
+  else
+    printf '  FAIL  Claude config dir not found: %s\n' "$dir"
+    return 1
+  fi
+  scan=$(cs_claude_scan)
+  n=$(printf '%s' "$scan" | grep -c . || true)
+  dirs=$(printf '%s\n' "$scan" | "$CS_AWK" -F'\t' 'NF { d[$1] = 1 } END { print length(d) + 0 }')
+  printf '  OK    %s sessions in %s project dirs\n' "$n" "$dirs"
+  printf '  OK    retention (cleanupPeriodDays, user settings): %s\n' "$(cs_claude_retention_days)"
+  junk=$(cs_claude_junk_dirs)
+  if [[ -n $junk ]]; then
+    while IFS= read -r d; do printf '  WARN  not a valid project dir (hijacks --resume): projects/%s\n' "$d"; done <<<"$junk"
+    problems=1
+  fi
+  dups=$(printf '%s\n' "$scan" | cs_claude_dup_ids /dev/stdin)
+  if [[ -n $dups ]]; then
+    printf '  WARN  %s session ids exist in more than one project dir\n' "$(printf '%s\n' "$dups" | grep -c .)"
+    problems=1
+  fi
+  if ((problems)); then
+    printf '\nProblems found: run "claude-sync repair --dry-run" (repair is not implemented yet).\n'
+    return 1
+  fi
+  printf '\nNo problems found.\n'
+}
+
 main() {
   case ${1:-help} in
     --version | version)
@@ -59,8 +122,16 @@ main() {
   local cmd=$1
   shift
   case $cmd in
-    setup | login | logout | folder | projects | sync | run | status | conflicts | restore | repair | \
-      service | hooks | config | machines | claude | doctor | logs | uninstall | kick)
+    doctor)
+      cs_bootstrap
+      cmd_doctor "$@"
+      ;;
+    projects)
+      cs_bootstrap
+      cmd_projects "$@"
+      ;;
+    setup | login | logout | folder | sync | run | status | conflicts | restore | repair | \
+      service | hooks | config | machines | claude | logs | uninstall | kick)
       cs_bootstrap
       cs_die "$CS_EXIT_ERROR" "'$cmd' is not implemented yet"
       ;;
