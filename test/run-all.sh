@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Local stand-in for the CI matrix (.github/workflows/test.yml).
-#   Git Bash: bats (gawk), then the same suite inside WSL with gawk and with mawk, plus shellcheck in WSL.
+# Local stand-in for the CI matrix (.github/workflows/test.yml). Jobs run in parallel; each job's output
+# is printed in full when it finishes, then a summary.
+#   Git Bash: bats (gawk) here, and inside WSL: bats (gawk), bats (mawk), shellcheck.
 #   Linux/WSL: bats (gawk), bats (mawk), shellcheck.
 # Usage: test/run-all.sh [--local] [bats args...]
 #   --local          only run the jobs for the current OS (used for the WSL leg)
@@ -15,22 +16,21 @@ if [[ ${1:-} == --local ]]; then
   local_only=1
   shift
 fi
-fail=0
+logdir=$(mktemp -d)
+names=()
+pids=()
 
+# job NAME CMD...: start CMD in the background, output to its own log.
 job() {
   local name=$1
   shift
-  printf '\n=== %s ===\n' "$name"
-  if "$@"; then
-    printf '=== %s: PASS ===\n' "$name"
-  else
-    printf '=== %s: FAIL ===\n' "$name"
-    fail=1
-  fi
+  names+=("$name")
+  ("$@") >"$logdir/${#names[@]}.log" 2>&1 &
+  pids+=($!)
 }
 
 shellcheck_all() {
-  (cd "$root" && shellcheck -x bin/claude-sync lib/*.sh test/*.bash test/run-all.sh)
+  cd "$root" && shellcheck -x bin/claude-sync lib/*.sh test/*.bash test/run-all.sh
 }
 
 case $OSTYPE in
@@ -59,4 +59,15 @@ case $OSTYPE in
     ;;
 esac
 
+fail=0
+summary=
+for i in "${!pids[@]}"; do
+  if wait "${pids[i]}"; then r=PASS; else r=FAIL; fail=1; fi
+  printf '\n=== %s ===\n' "${names[i]}"
+  tr -d '\r' <"$logdir/$((i + 1)).log"
+  printf '=== %s: %s ===\n' "${names[i]}" "$r"
+  summary+="  ${names[i]}: $r"$'\n'
+done
+rm -rf -- "$logdir"
+printf '\nSummary:\n%s' "$summary"
 exit "$fail"
