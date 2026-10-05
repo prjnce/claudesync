@@ -29,3 +29,15 @@ Theo đúng thứ tự §19:
 - [ ] Test: dòng có ký tự `0x7F` và surrogate lẻ được giữ đúng byte.
 - [ ] Kill giữa chừng rồi chạy lại → kết quả giống chạy một lần.
 - [ ] **A8** pass trên máy này (người dùng chạy `repair --dry-run` rồi `repair`, kiểm tra `claude --resume <id>` mở đúng bản).
+
+## Comments
+
+**2026-10-05 — Claude:** Code xong; chờ người dùng duyệt chạy thật (điểm duyệt 4).
+- `lib/repair.sh` + `claude-sync repair [--dry-run] [--yes] [--project X]`: xét mọi `*.jsonl` (cả subagent) trong thư mục slug hợp lệ; phát hiện CR / JSON có dấu cách / cwd lạ; với mỗi dòng: (a) byte gốc từ thư mục rác nếu bằng nhau về JSON, (b) node, (c) python3, dòng đã gọn sẵn thì giữ nguyên byte; dịch cwd lạ qua transform (alias `/mnt/d/...` → root project của máy này, người dùng xác nhận); ghi file một lần, đếm dòng/CR trong luồng; backup + giữ mtime + journal; bỏ qua session đang mở; chuyển thư mục rác vào `~/.claude-sync/backups/repair-<ts>/junk/`.
+- **Hai lỗi tìm được nhờ dry-run trên dữ liệu thật:**
+  1. Nhận nhầm file native: cwd dạng Git Bash `/d/Projects/...` (trong `wireIngestContext`) bị coi là path lạ → đã loại trừ dạng ổ đĩa MSYS.
+  2. **jq 1.6 `-R` làm hỏng ký tự UTF-8 nhiều byte ở ranh giới bộ đệm trên dòng dài** (121 dòng của `1cafbcb6`) → so khớp dùng node/python, không dùng `jq -R`. Có test hồi quy tái hiện lỗi.
+- **Dry-run thật (sau sửa):** 23 transcript (12 chính + 11 subagent), 19.884 dòng: tất cả lấy byte gốc từ `.bak` trừ 115 dòng của `0c49cf5c` ghi lại bằng node; 0 dòng lỗi; 0 lỗi kiểm tra; thư mục `.bak` sẽ được chuyển ra backup. Đã kiểm chứng dry-run không thay đổi file nào trong `~/.claude/projects`.
+- Project `TransFlow` (`34a928c6`, root `d:\Projects\TransFlow`) đã được map trong `~/.claude-sync` để có alias dịch path.
+- 12 test.
+- Bổ sung: so khớp chạy qua `/bin/sh` của awk (dash trên Ubuntu) → chương trình node/python và path truyền qua biến môi trường, không nhúng vào chuỗi lệnh; `repair` dọn journal dở dang khi khởi động; test 0x7F + surrogate lẻ và kill giữa chừng. 14 test; toàn bộ pass trên 3 cấu hình; shellcheck sạch.
