@@ -41,3 +41,11 @@ Theo đúng thứ tự §19:
 - Project `TransFlow` (`34a928c6`, root `d:\Projects\TransFlow`) đã được map trong `~/.claude-sync` để có alias dịch path.
 - 12 test.
 - Bổ sung: so khớp chạy qua `/bin/sh` của awk (dash trên Ubuntu) → chương trình node/python và path truyền qua biến môi trường, không nhúng vào chuỗi lệnh; `repair` dọn journal dở dang khi khởi động; test 0x7F + surrogate lẻ và kill giữa chừng. 14 test; toàn bộ pass trên 3 cấu hình; shellcheck sạch.
+
+**2026-10-05 — Claude (chạy thật, điểm duyệt 4, người dùng đồng ý):**
+- Backup toàn bộ trước khi chạy: `~/.claude-sync/backups/projects-full-20261005T091632Z.tar.gz` (208/208 file, 112 MB).
+- `repair --yes`: 23 transcript; thư mục `D--Projects-TransFlow.bak-20260925-170208` chuyển sang `~/.claude-sync/backups/repair-20261005T091656Z/junk/`. So md5 trước/sau: đúng 23 file thay đổi (tất cả trong `D--Projects-TransFlow`), 47 file của `.bak` được chuyển đi, không file nào khác bị đụng.
+- Kiểm chứng độc lập: 21/21 file lấy hoàn toàn từ bản gốc **khớp từng byte** với `transform(bản gốc)`; mọi file giữ đúng mtime và số dòng, 0 CR, 0 dòng JSON lỗi.
+- Phát hiện thêm: bản "gốc" của `0a5d8407/subagents/agent-af1b02a0…` trong `.bak` cũng đã bị serialize lại → repair lần 1 để lại 161 dòng có dấu cách. Sửa: chỉ tin dòng gốc đã ở dạng gọn (có test); chạy lại → 161 dòng ghi lại bằng node (backup `repair-20261005T092808Z`).
+- Sau cùng: 0 giá trị path còn `/mnt/` trong TransFlow, 0 CR, 0 file có JSON dấu cách; `doctor`: "Không có vấn đề" (19 session, 2 thư mục project). Chỉ còn `/mnt/d` trong nội dung hội thoại (lịch sử, giữ nguyên theo §4.7).
+- Còn lại: người dùng thử `claude --resume <id>` (A8).

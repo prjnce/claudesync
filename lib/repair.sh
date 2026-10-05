@@ -169,7 +169,8 @@ BEGIN {
     while ((ocmd | getline c) > 0) {
       if ((getline r < orf) <= 0) break
       sub(/\r$/, "", r)
-      if (c != BAD && !(c in M)) M[c] = r
+      # An "original" can itself be a re-serialized copy (seen on real data): only compact lines count.
+      if (c != BAD && !(c in M) && !spaced(r)) M[c] = r
     }
     close(ocmd); close(orf)
   }

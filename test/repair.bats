@@ -131,6 +131,14 @@ setup() {
   [ "$(sed -n 1p "$P/$SLUG/s8.jsonl")" = '{"type":"user","n":1}' ]
 }
 
+@test "an 'original' that is itself re-serialized is not trusted: its lines are re-compacted" {
+  printf '%s\n' '{"type": "user", "n": 5}' >"$P/$SLUG.bak-20260925-170208/s5x.jsonl"
+  printf '%s\n' '{"type": "user", "n": 5}' >"$P/$SLUG/s5x.jsonl"
+  run cs_repair --yes
+  [[ $output == *'1 lines: 0 from the original, 1 re-serialized'* ]]
+  [ "$(cat "$P/$SLUG/s5x.jsonl")" = '{"type":"user","n":5}' ]
+}
+
 @test "DEL bytes and lone surrogates survive byte for byte" {
   printf '%s\n' "{\"type\":\"user\",\"t\":\"a$(printf '\x7f')b \\ud800 c\"}" >"$P/$SLUG.bak-20260925-170208/s6.jsonl"
   printf '%s\r\n' "{\"type\": \"user\", \"t\": \"a$(printf '\x7f')b \\ud800 c\"}" >"$P/$SLUG/s6.jsonl"
