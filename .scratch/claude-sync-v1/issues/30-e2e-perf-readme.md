@@ -32,3 +32,4 @@ Chạy trên 3 máy thật: Windows (máy này) ↔ WSL `Ubuntu2404` ↔ một m
 - [ ] Hướng dẫn tiếng Việt: tạo OAuth client (§16.1), cài trên Windows/Ubuntu/WSL, `setup`, alias wrapper, các lệnh chính, gỡ cài đặt, giới hạn v1 (§1.3).
 
 ## Comments
+- 2026-10-05: hiển thị `docs/logo.png` ở đầu README.

@@ -25,3 +25,7 @@ Spec: SPEC §17.2, §17.3, §6 (`realRoot` qua launcher); mẫu XML `docs/resear
 - [ ] Kiểm thật: chạy ẩn hoàn toàn, Last Run Result = exit code của engine, `IgnoreNew` ngăn chạy chồng, kill task dọn cả cây tiến trình.
 - [ ] Kiểm thật: action WSL chạy được engine trong distro.
 - [ ] `service uninstall` gỡ task, giữ dữ liệu.
+
+## Comments
+
+**2026-10-05 — Claude:** Tuỳ chọn: gắn `docs/logo.png` làm icon cho `launcher.exe` (`csc /win32icon:` cần file `.ico`; chuyển PNG → ICO bằng PowerShell `System.Drawing` lúc cài). Giá trị thấp vì launcher chạy ẩn (chỉ thấy trong Task Manager); làm nếu rẻ.

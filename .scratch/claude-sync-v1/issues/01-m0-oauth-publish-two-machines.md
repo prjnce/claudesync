@@ -34,3 +34,4 @@ Spec: SPEC §2 (OAuth), §15.1, §16.1, §25 Q1–Q2
 - `prompt=consent` cần thiết: cả 2 máy đều nhận được `refresh_token`.
 - Folder thử `Claude Sync (dev)` giữ lại trên Drive để test M2; không phải folder gốc thật (key `csSpike`, không phải `csRoot`).
 - **2026-10-05 (bổ sung):** Bấm Publish thì Google báo "To publish your app, you must complete your configuration on the Branding page" → phải điền trang Branding (tên app, email hỗ trợ, có thể cả logo / trang chủ / chính sách riêng tư / domain) trước. Người dùng hoãn việc này; Q1 vẫn mở. Hệ quả tạm thời: token chỉ sống 7 ngày, đủ cho phát triển và test M2.
+- **Logo (2026-10-05):** người dùng có `docs/logo.png` (512×520, RGBA). Lưu ý khi làm trang Branding: Google yêu cầu logo vuông 120×120 px, ≤ 1 MB; và **tải logo lên thường kéo theo yêu cầu xác minh thương hiệu (brand verification)**, có thể mất nhiều ngày. Khuyến nghị: Publish trước, **không** tải logo, vì scope `drive.file` không nhạy cảm; cần kiểm chứng lúc làm.
