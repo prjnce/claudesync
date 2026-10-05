@@ -22,3 +22,10 @@ Engine gọi Drive qua một giao diện hẹp; có backend giả `drive_backend
 - [ ] Bộ test hợp đồng (contract test) cho giao diện chạy trên `localfs`; sau này #11 chạy cùng bộ test với Drive thật (job thủ công).
 - [ ] `upload` với `file_id` đã cấp trước là idempotent (thử lại không sinh bản trùng).
 - [ ] `trash` không bao giờ xoá vĩnh viễn; không có hàm `empty_trash`.
+
+## Comments
+
+**2026-10-05 — Claude:** Đã làm xong, chờ duyệt.
+- `lib/drive.sh`: giao diện `drv_*` (generate_ids, create_folder, upload — idempotent theo ID cấp trước, update_content, download, get_meta, list_children, find_by_prop, changes_start_token, changes_list, trash, server_time, about_user), chọn backend bằng `CS_DRIVE_BACKEND`; mã thoát chung 0/3/4/6/7/9. Không có hàm xoá vĩnh viễn hay empty trash.
+- Backend `localfs` (`CS_LFS_ROOT`): `objects/<id>/{meta.json,content}`, `changes.log`; `CS_LFS_NOW` giả giờ server; `cs_lfs_inject OP RC COUNT` để tiêm lỗi.
+- `test/drive_localfs.bats`: 12 test, phần hợp đồng chỉ dùng `drv_*` để #11 chạy lại với Drive thật. Toàn bộ 131/131 pass trên 3 cấu hình.
