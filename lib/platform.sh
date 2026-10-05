@@ -183,24 +183,29 @@ foreach ($id in ($env:CS_PIDS -split " ")) {
   fi
 }
 
-# cs_lock_fd9 [WAIT_SECONDS]: take an exclusive OS lock on the already-open fd 9; rc 1 if still busy after
-# WAIT_SECONDS (default 0 = do not wait). The OS releases it when the last holder of fd 9 exits, so a
-# killed or suspended run never leaves a stale lock. Long-lived children should run with 9>&-.
-cs_lock_fd9() {
-  local wait=${1:-0}
+# cs_lock_fd FD [WAIT_SECONDS]: take an exclusive OS lock on the already-open FD; rc 1 if still busy after
+# WAIT_SECONDS (default 0 = do not wait). The OS releases it when the last holder of FD exits, so a
+# killed or suspended run never leaves a stale lock. fd 9 is the sync lock (long-lived children should
+# run with 9>&-); fd 8 is the token-refresh lock.
+cs_lock_fd() {
+  local fd=$1 wait=${2:-0}
   if command -v flock >/dev/null 2>&1; then
-    if [[ $wait == 0 ]]; then flock -n 9; else flock -w "$wait" 9; fi
+    if [[ $wait == 0 ]]; then flock -n "$fd"; else flock -w "$wait" "$fd"; fi
   else
     perl -MFcntl=:flock -MTime::HiRes=sleep,time -e '
-      open(my $f, ">&=", 9) or die "claude-sync: fdopen 9: $!\n";
-      my $deadline = time + $ARGV[0];
+      open(my $f, ">&=", $ARGV[0]) or die "claude-sync: fdopen $ARGV[0]: $!\n";
+      my $deadline = time + $ARGV[1];
       until (flock($f, LOCK_EX | LOCK_NB)) { exit 1 if time >= $deadline; sleep 0.05 }
-      exit 0' "$wait"
+      exit 0' "$fd" "$wait"
   fi
 }
 
-# cs_lock_acquire FILE [WAIT_SECONDS]: open FILE on fd 9 of the current shell and lock it.
+cs_lock_fd9() {
+  cs_lock_fd 9 "${1:-0}"
+}
+
+# cs_lock_acquire FILE [WAIT_SECONDS]: open FILE on fd 9 of the current shell and lock it (sync lock).
 cs_lock_acquire() {
   exec 9>>"$1"
-  cs_lock_fd9 "${2:-0}"
+  cs_lock_fd 9 "${2:-0}"
 }

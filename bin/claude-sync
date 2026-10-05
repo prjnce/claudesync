@@ -95,6 +95,37 @@ cmd_doctor() {
   cs_say doctor.ok
 }
 
+cmd_login() {
+  cs_use platform version auth
+  local client=
+  while (($#)); do
+    case $1 in
+      --client)
+        client=${2:-}
+        shift 2 || cs_die_t "$CS_EXIT_USAGE" cli.unknown_command "login --client"
+        ;;
+      *) cs_die_t "$CS_EXIT_USAGE" cli.unknown_command "login $1" ;;
+    esac
+  done
+  mkdir -p -- "$CS_HOME"
+  if [[ -n $client ]]; then
+    cs_client_install "$client"
+    cs_say auth.client_installed "$(cs_client_file)"
+  fi
+  cs_auth_login || exit "$?"
+  if declare -F cs_drive_whoami >/dev/null; then
+    cs_say auth.signed_in_as "$(cs_drive_whoami)"
+  else
+    cs_say auth.signed_in
+  fi
+}
+
+cmd_logout() {
+  cs_use platform version auth
+  cs_auth_logout
+  cs_say auth.logged_out
+}
+
 main() {
   case ${1:-help} in
     --version | version)
@@ -119,7 +150,15 @@ main() {
       cs_bootstrap
       cmd_projects "$@"
       ;;
-    setup | login | logout | folder | sync | run | status | conflicts | restore | repair | \
+    login)
+      cs_bootstrap
+      cmd_login "$@"
+      ;;
+    logout)
+      cs_bootstrap
+      cmd_logout "$@"
+      ;;
+    setup | folder | sync | run | status | conflicts | restore | repair | \
       service | hooks | config | machines | claude | logs | uninstall | kick)
       cs_bootstrap
       cs_die_t "$CS_EXIT_ERROR" cli.not_implemented "$cmd"
