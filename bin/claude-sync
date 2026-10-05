@@ -177,7 +177,14 @@ main() {
       cs_use platform version store claude transform projects ui repair
       cs_repair "$@"
       ;;
-    sync | run | status | conflicts | restore | \
+    run | sync)
+      local a
+      for a in "$@"; do [[ $a == --trigger=* ]] && CS_TRIGGER=${a#--trigger=}; done
+      cs_bootstrap
+      cs_use platform version manifest store claude transform projects drive root engine
+      if [[ " $* " == *" --dry-run "* ]]; then cs_run --dry-run; else cs_run; fi
+      ;;
+    status | conflicts | restore | \
       service | hooks | config | machines | claude | logs | uninstall | kick)
       cs_bootstrap
       cs_die_t "$CS_EXIT_ERROR" cli.not_implemented "$cmd"

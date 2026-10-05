@@ -1,0 +1,169 @@
+#!/usr/bin/env bats
+# Engine tracer (ticket #17): append-only sync between simulated machines over a shared localfs Drive.
+# A is Windows-like (root D:\Projects\X), B is Linux (root is a real dir), C is Windows-like.
+
+load test_helper
+load sim_helper
+
+SID=0b7a1c2e-1111-4222-8333-444455556666
+
+setup() {
+  cs_test_setup
+  cs_load platform version
+  sim_init
+  BROOT="$SIM/B/work/X"
+  sim_machine A w 'D:\Projects\X'
+  sim_machine B p "$BROOT"
+  ASLUG=D--Projects-X
+  BSLUG=$(cc_slug "$BROOT")
+}
+
+aline() { printf '{"type":"user","cwd":"D:\\\\Projects\\\\X%s","n":%s,"t":"xin chào %s"}' "${2:-}" "$1" "$1"; }
+
+@test "A -> B: a new session appears on B in the right project dir with translated cwd and A's mtime" {
+  sim_write A "$ASLUG" "$SID" "$(aline 1)" "$(aline 2 '\\apps')" "$(aline 3)"
+  touch -d @1790000000 "$SIM/A/claude/projects/$ASLUG/$SID.jsonl"
+  run sim_run A
+  echo "$output"
+  [ "$status" -eq 0 ]
+  [[ $output == *'0 installed, 1 published'* ]]
+  run sim_run B
+  echo "$output"
+  [[ $output == *'1 installed, 0 published'* ]]
+  f="$SIM/B/claude/projects/$BSLUG/$SID.jsonl"
+  [ -f "$f" ]
+  [ "$(wc -l <"$f")" -eq 3 ]
+  grep -qF "\"cwd\":\"$BROOT\"" "$f"
+  grep -qF "\"cwd\":\"$BROOT/apps\"" "$f"
+  [ "$(stat -c %Y "$f")" = 1790000000 ]
+  [ "$(sim_canon B "$f")" = "$(sim_canon A "$SIM/A/claude/projects/$ASLUG/$SID.jsonl")" ]
+}
+
+@test "appends travel both ways (A2) and only new segments are downloaded" {
+  sim_write A "$ASLUG" "$SID" "$(aline 1)" "$(aline 2)"
+  sim_run A >/dev/null
+  sim_run B >/dev/null
+  sim_write A "$ASLUG" "$SID" "$(aline 3)"
+  sim_run A >/dev/null
+  run sim_run B
+  [[ $output == *'1 installed'* ]]
+  fb="$SIM/B/claude/projects/$BSLUG/$SID.jsonl"
+  [ "$(wc -l <"$fb")" -eq 3 ]
+  [ "$(ls "$SIM/B/home/.claude-sync/cache/segs" | wc -l)" -eq 2 ]
+  printf '{"type":"assistant","cwd":"%s","n":4}\n' "$BROOT" >>"$fb"
+  run sim_run B
+  [[ $output == *'1 published'* ]]
+  run sim_run A
+  [[ $output == *'1 installed'* ]]
+  fa="$SIM/A/claude/projects/$ASLUG/$SID.jsonl"
+  [ "$(wc -l <"$fa")" -eq 4 ]
+  [ "$(tail -n 1 "$fa")" = '{"type":"assistant","cwd":"D:\\Projects\\X","n":4}' ]
+  [ "$(sim_canon A "$fa")" = "$(sim_canon B "$fb")" ]
+}
+
+@test "three machines taking turns converge without reinstall or republish loops (C1)" {
+  sim_machine C w 'E:\Work\X'
+  sim_write A "$ASLUG" "$SID" "$(aline 1)"
+  for round in 1 2 3; do
+    sim_run A >/dev/null
+    sim_run B >/dev/null
+    sim_run C >/dev/null
+    fb=$(sim_find B "$SID")
+    printf '{"type":"user","cwd":"%s","n":"b%s"}\n' "$BROOT" "$round" >>"$fb"
+    sim_run B >/dev/null
+    sim_run C >/dev/null
+    sim_run A >/dev/null
+  done
+  # Quiet state: nobody installs or publishes anything any more.
+  for m in A B C A B C; do
+    run sim_run "$m"
+    [[ $output == *'0 installed, 0 published'* ]] || { echo "$m: $output"; return 1; }
+  done
+  a=$(sim_canon A "$(sim_find A "$SID")")
+  [ "$a" = "$(sim_canon B "$(sim_find B "$SID")")" ]
+  [ "$a" = "$(sim_canon C "$(sim_find C "$SID")")" ]
+  [ "$(wc -l <<<"$a")" -eq 4 ]
+}
+
+@test "placement: an existing slug dir that differs in case is reused (P1); a missing subdir maps to its nearest ancestor (P7)" {
+  sim_machine C w 'D:\Projects\X'
+  mkdir -p "$SIM/C/claude/projects/d--projects-x"
+  sim_write A "$ASLUG" "$SID" "$(aline 1)"
+  sim_run A >/dev/null
+  sim_run C >/dev/null
+  [ "$(sim_find C "$SID")" = "$SIM/C/claude/projects/d--projects-x/$SID.jsonl" ]
+  # Launched in a subdirectory that exists only on A: B places it under its root.
+  S2=0b7a1c2e-2222-4222-8333-444455556666
+  sim_write A D--Projects-X-apps-tmp "$S2" "$(aline 1 '\\apps\\tmp')"
+  sim_run A >/dev/null
+  sim_run B >/dev/null
+  [ "$(sim_find B "$S2")" = "$SIM/B/claude/projects/$BSLUG/$S2.jsonl" ]
+  mkdir -p "$BROOT/apps"
+  S3=0b7a1c2e-3333-4222-8333-444455556666
+  sim_write A D--Projects-X-apps-tmp "$S3" "$(aline 1 '\\apps\\tmp')"
+  sim_run A >/dev/null
+  sim_run B >/dev/null
+  [ "$(sim_find B "$S3")" = "$SIM/B/claude/projects/$(cc_slug "$BROOT/apps")/$S3.jsonl" ]
+}
+
+@test "a failed upload leaves nothing half done; the next run publishes once, without duplicate objects" {
+  sim_write A "$ASLUG" "$SID" "$(aline 1)"
+  sim_exec A 'cs_lfs_inject upload 7 1'
+  run sim_run A
+  [[ $output == *'0 published'* ]]
+  run sim_run B
+  [[ $output == *'0 installed'* ]]
+  run sim_run A
+  [[ $output == *'1 published'* ]]
+  sim_run B >/dev/null
+  [ "$(sim_find B "$SID" | wc -l)" -eq 1 ]
+  [ "$(grep -l "\"csSid\":\"$SID\"" "$SIM"/drive/objects/*/meta.json | wc -l)" -eq 1 ]
+}
+
+@test "a second run while one holds the lock exits 5 (busy)" {
+  (
+    exec 9>>"$SIM/A/home/.claude-sync/sync.lock"
+    cs_lock_fd 9 0
+    sleep 3
+  ) 3>&- &
+  holder=$!
+  sleep 0.7
+  run sim_run A
+  wait "$holder"
+  [ "$status" -eq 5 ]
+}
+
+@test "every session id has exactly one file under projects/ on every machine (A5)" {
+  sim_machine C w 'D:\Projects\X'
+  for i in 1 2 3; do sim_write A "$ASLUG" "0b7a1c2e-000$i-4222-8333-444455556666" "$(aline "$i")"; done
+  sim_run A >/dev/null
+  sim_run B >/dev/null
+  sim_run C >/dev/null
+  sim_run B >/dev/null
+  for m in A B C; do
+    [ -z "$(find "$SIM/$m/claude/projects" -name '*.jsonl' -printf '%f\n' | sort | uniq -d)" ]
+    [ "$(find "$SIM/$m/claude/projects" -name '*.jsonl' | wc -l)" -eq 3 ]
+  done
+}
+
+@test "sessions of projects not mapped on the receiving machine are not installed" {
+  sim_exec B 'cs_tsv_delete projects p1 "$1"' "$BROOT"
+  sim_write A "$ASLUG" "$SID" "$(aline 1)"
+  sim_run A >/dev/null
+  run sim_run B
+  [[ $output == *'0 installed'* ]]
+  [ -z "$(sim_find B "$SID")" ]
+}
+
+@test "unmapped local sessions are never published" {
+  sim_write A D--Elsewhere "$SID" '{"type":"user","cwd":"D:\\Elsewhere"}'
+  run sim_run A
+  [[ $output == *'0 published'* ]]
+}
+
+@test "dry run lists the plan and changes nothing" {
+  sim_write A "$ASLUG" "$SID" "$(aline 1)"
+  run sim_run A --dry-run
+  [[ $output == *"publish $SID"* ]]
+  [ -z "$(ls "$SIM/drive/objects" | head -n 1)" ] || [ "$(grep -l csSid "$SIM"/drive/objects/*/meta.json 2>/dev/null | wc -l)" -eq 0 ]
+}

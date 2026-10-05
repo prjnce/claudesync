@@ -143,6 +143,11 @@ declare -gA CS_MSG_en=(
   [repair.summary_dry]='Dry run: %s transcripts would be rewritten (%s lines, %s unparsable kept), %s failed checks. Nothing was changed.'
   [repair.summary]='Rewrote %s transcripts (%s lines, %s unparsable kept), %s failed checks. Backups: %s'
 
+  [engine.not_setup]='This machine is not set up yet: run "claude-sync setup".'
+  [engine.busy]='Another claude-sync run is in progress; nothing to do.'
+  [engine.root_missing]='The root folder on Google Drive is missing or in the trash (ROOT_MISSING); nothing was synced.'
+  [engine.summary]='Sync done: %s installed, %s published.'
+
   [projects.col_sessions]='SESSIONS'
   [projects.col_size]='SIZE'
   [projects.col_cwd]='LAUNCH CWD (newest session)'

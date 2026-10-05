@@ -143,6 +143,11 @@ declare -gA CS_MSG_vi=(
   [repair.summary_dry]='Chạy thử: %s transcript sẽ được ghi lại (%s dòng, giữ %s dòng không parse được), %s lỗi kiểm tra. Chưa thay đổi gì.'
   [repair.summary]='Đã ghi lại %s transcript (%s dòng, giữ %s dòng không parse được), %s lỗi kiểm tra. Backup: %s'
 
+  [engine.not_setup]='Máy này chưa được thiết lập: hãy chạy "claude-sync setup".'
+  [engine.busy]='Đang có một lần chạy claude-sync khác; không làm gì thêm.'
+  [engine.root_missing]='Folder gốc trên Google Drive không còn hoặc đang ở thùng rác (ROOT_MISSING); chưa sync gì.'
+  [engine.summary]='Sync xong: cài %s, công bố %s.'
+
   [projects.col_sessions]='SESSION'
   [projects.col_size]='DUNG LƯỢNG'
   [projects.col_cwd]='THƯ MỤC KHỞI CHẠY (session mới nhất)'
