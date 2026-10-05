@@ -163,7 +163,7 @@ cs_pid_alive() {
 # in sessions/<pid>.json procStart. Windows: creation time as FILETIME (UTC); Linux: ps lstart in UTC.
 cs_proc_start_ids() {
   (($#)) || return 0
-  local p s
+  local p s IFS=' '
   if cs_is_msys; then
     CS_PIDS="$*" cs_ps procstart '
 foreach ($id in ($env:CS_PIDS -split " ")) {

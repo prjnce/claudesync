@@ -81,7 +81,7 @@ cs_required_tools() {
   [[ $CS_OS == windows ]] && tools+=(cygpath powershell.exe)
   if [[ -n ${CS_TEST_EXTRA_TOOLS:-} ]]; then
     local -a extra
-    read -r -a extra <<<"$CS_TEST_EXTRA_TOOLS"
+    IFS=' ' read -r -a extra <<<"$CS_TEST_EXTRA_TOOLS"
     tools+=("${extra[@]}")
   fi
   printf '%s\n' "${tools[@]}"

@@ -26,3 +26,11 @@ Spec: SPEC §5.2, §11, §14.1
 - [ ] Test: giá trị có tab/newline bị từ chối hoặc escape rõ ràng.
 - [ ] Test: journal dở dang được liệt kê sau khi process bị kill.
 - [ ] Xoá toàn bộ `state/` thì lần gọi sau tự tạo lại cấu trúc rỗng, không lỗi.
+
+## Comments
+
+**2026-10-05 — Claude:** Đã làm xong, chờ duyệt.
+- `lib/store.sh`: `cs_store_init`, `cs_store_same_volume`; bảng TSV có dòng header (`cs_tsv_get/field/rows/upsert/upsert_many/delete`, `cs_tsv_split` giữ field rỗng); header lệch schema thì dừng; `cs_known_add/has`; journal (`cs_journal_begin/end/pending/op/abandon`, payload JSON có mảng `tmp`).
+- Khác SPEC §11: tên cột viết `snake_case`; `projects.tsv` đặt `cwd_root` thành cột 2 vì khoá là (`project_id`, `cwd_root`) — một dòng cho mỗi root. `forks.tsv` khoá (`sid`, `losing_version`), `pending_map.tsv` khoá (`kind`, `key`).
+- Bài học: bats chạy test với `IFS` khác mặc định; mọi `read -a` / `"$*"` trong lib phải tự đặt `IFS` cục bộ (đã sửa ở core, platform, store).
+- 15 test mới; toàn bộ 59/59 pass trên 3 cấu hình; shellcheck sạch.
