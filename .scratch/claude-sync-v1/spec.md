@@ -28,7 +28,7 @@ Nguồn chuẩn: [docs/SPEC.md](../../docs/SPEC.md) (v1.2, 2026-10-05). File nà
 | 09 | [Giao diện backend Drive + backend localfs](issues/09-drive-backend-localfs.md) | M2 | 05 | agent |
 | 10 | [OAuth login/logout và lưu token](issues/10-oauth-login-token.md) | M2 | 01, 06 | agent |
 | 11 | [Wrapper gd() cho Drive API thật](issues/11-drive-api-gd.md) | M2 | 09, 10 | agent |
-| 12 | [Folder gốc, marker, setup bước 1–6](issues/12-root-folder-setup-1-6.md) | M2 | 07, 10, 11 | agent |
+| 12 | [Folder gốc, marker, setup bước 1–6](issues/12-root-folder-setup-1-6.md) | M2 | 07, 10, 11, 32 | agent |
 | 13 | [Transform dịch path (§7)](issues/13-path-transform.md) | M4→M1 | 06 | agent |
 | 14 | [Định danh và map project (§6)](issues/14-project-identity-mapping.md) | M4 | 07, 08, 13 | agent |
 | 15 | [Repair dữ liệu cũ (§19)](issues/15-repair.md) | M3 | 04, 08, 13, 14 | agent |

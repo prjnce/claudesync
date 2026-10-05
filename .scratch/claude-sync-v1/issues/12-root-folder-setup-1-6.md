@@ -4,12 +4,13 @@ Status: needs-triage
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M2
-Blocked by: 07, 10, 11
+Blocked by: 07, 10, 11, 32
 Spec: SPEC §5.2 (`.claude-sync-owner`), §6 (machine_id), §9.1, §16 bước 1–6
 
 ## Phạm vi
 
-- `claude-sync setup` khung wizard chạy lại được, mỗi bước chạy riêng được; trong ticket này làm bước 1–6:
+- `claude-sync setup` khung wizard chạy lại được, mỗi bước chạy riêng được; trong ticket này làm bước 0–6:
+  0. Chọn ngôn ngữ English (mặc định) / Tiếng Việt → ghi `lang` vào config (SPEC §20.1, #32).
   1. Kiểm tra phụ thuộc (dùng bootstrap #05).
   2. OAuth client: in hướng dẫn §16.1 nếu chưa có, hỏi đường dẫn JSON, chép vào `~/.claude-sync/oauth-client.json` (600).
   3. Proxy: lưu `HTTPS_PROXY` (Windows đọc thêm proxy WinINET).
