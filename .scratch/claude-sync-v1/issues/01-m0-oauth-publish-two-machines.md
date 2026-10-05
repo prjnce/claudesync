@@ -33,3 +33,4 @@ Spec: SPEC §2 (OAuth), §15.1, §16.1, §25 Q1–Q2
 - **Q1 — chưa xong.** Response đổi code có `refresh_token_expires_in = 604799` → app đang ở **Testing** (token hết hạn sau 7 ngày). Còn phải: Publish app, chạy lại spike trên một máy để thấy dòng "In production", và ghi lại Google có đòi URL trang chủ / chính sách riêng tư / domain không.
 - `prompt=consent` cần thiết: cả 2 máy đều nhận được `refresh_token`.
 - Folder thử `Claude Sync (dev)` giữ lại trên Drive để test M2; không phải folder gốc thật (key `csSpike`, không phải `csRoot`).
+- **2026-10-05 (bổ sung):** Bấm Publish thì Google báo "To publish your app, you must complete your configuration on the Branding page" → phải điền trang Branding (tên app, email hỗ trợ, có thể cả logo / trang chủ / chính sách riêng tư / domain) trước. Người dùng hoãn việc này; Q1 vẫn mở. Hệ quả tạm thời: token chỉ sống 7 ngày, đủ cho phát triển và test M2.
