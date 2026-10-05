@@ -1,0 +1,23 @@
+# 06 — Module platform: nat, cc_slug, realpath, khoá
+
+Status: needs-triage
+Đề xuất: ready-for-agent
+Type: task
+Mốc: M1
+Blocked by: 05
+Spec: SPEC §3.3, §4.1, §4.6, §14 bước 1; code tham chiếu `docs/research/bash.md` (`cc_slug`), `docs/prototypes/cc_slug_iconv.sh`
+
+## Phạm vi (`lib/platform.sh`)
+
+- `nat()`: đặt `MSYS_NO_PATHCONV=1`, `MSYS2_ARG_CONV_EXCL='*'`; từ chối tham số là path POSIX bắt đầu bằng `/`; output qua `tr -d '\r'`. Helper `to_win_path` dùng `cygpath -m`.
+- `cc_slug`: port slug của Claude (UTF-16 code unit, cắt 200 + `-base36(hash)`), hàm tự đặt `C.UTF-8` cục bộ.
+- `realpath_disk`: Linux `realpath`; Windows tạm dùng PowerShell `GetFinalPathNameByHandle` (launcher thay thế ở #26).
+- `pid_alive pid procStart`: Linux qua `/proc/<pid>/stat`; Windows qua `ps -W` (cột 4 là PID native) và so `procStart` (FILETIME).
+- Khoá fd: `exec 9>>sync.lock`; Linux `flock -n 9`; Git Bash `perl -MFcntl=:flock`. Tiến trình con chạy lâu dùng `9>&-`. **Không** dùng khoá mkdir hoặc khoá PID.
+
+## Tiêu chí nghiệm thu
+
+- [ ] `cc_slug` pass 22/22 vector (Windows, WSL, Linux, tiếng Việt NFC/NFD, emoji, > 200 ký tự, chuỗi rỗng) trên cả 3 job CI.
+- [ ] Test khoá: 20 tiến trình × 5 lần tăng một bộ đếm = đúng 100, trên Linux và Git Bash.
+- [ ] Test khoá: tiến trình giữ khoá bị kill thì khoá được OS nhả (kịch bản **F3**: sleep giữa chu kỳ không để lại khoá kẹt).
+- [ ] Test `nat()` từ chối `/c/Users/...` và chấp nhận `C:/Users/...`.

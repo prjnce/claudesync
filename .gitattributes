@@ -1,0 +1,4 @@
+# Never convert line endings: every file is committed and checked out byte-for-byte.
+# This overrides core.autocrlf on every machine, including CI runners (Windows runners default to true).
+# Scripts must still be LF to run on Linux: test/lint.bats enforces that.
+* -text

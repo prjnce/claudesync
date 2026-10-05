@@ -1,0 +1,6 @@
+# OAuth client secrets: never commit
+docs/google_client_secret.json
+*client_secret*.json
+
+# Local test output
+/test/tmp/
