@@ -13,7 +13,7 @@ cs_claude_dir() {
   if [[ -n ${CS_CLAUDE_DIR:-} ]]; then
     d=$CS_CLAUDE_DIR
   elif [[ -n ${CLAUDE_CONFIG_DIR+set} ]]; then
-    [[ -n $CLAUDE_CONFIG_DIR ]] || cs_die "$CS_EXIT_ERROR" "CLAUDE_CONFIG_DIR is set but empty"
+    [[ -n $CLAUDE_CONFIG_DIR ]] || cs_die_t "$CS_EXIT_ERROR" claude.config_dir_empty
     d=$CLAUDE_CONFIG_DIR
   elif [[ $CS_OS == windows && -n ${USERPROFILE:-} ]]; then
     d="$USERPROFILE\\.claude"
@@ -181,10 +181,10 @@ cs_claude_retention_days() {
 cs_claude_settings_set() {
   local key=$1 val=$2 f ts
   f="$(cs_claude_dir)/settings.json"
-  printf '%s' "$val" | jq -e . >/dev/null 2>&1 || cs_die "$CS_EXIT_ERROR" "settings: value for $key is not JSON"
+  printf '%s' "$val" | jq -e . >/dev/null 2>&1 || cs_die_t "$CS_EXIT_ERROR" settings.not_json "$key"
   mkdir -p -- "${f%/*}" "$CS_HOME/backups"
   if [[ -f $f ]]; then
-    jq -e 'type == "object"' "$f" >/dev/null 2>&1 || cs_die "$CS_EXIT_ERROR" "settings: $f is not a JSON object; not touching it"
+    jq -e 'type == "object"' "$f" >/dev/null 2>&1 || cs_die_t "$CS_EXIT_ERROR" settings.not_object "$f"
     TZ=UTC printf -v ts '%(%Y%m%dT%H%M%SZ)T' -1
     cp -p -- "$f" "$CS_HOME/backups/settings.json.$ts.$$"
   else

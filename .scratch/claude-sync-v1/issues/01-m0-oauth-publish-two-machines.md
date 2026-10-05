@@ -26,3 +26,10 @@ Spec: SPEC §2 (OAuth), §15.1, §16.1, §25 Q1–Q2
 - [ ] Cập nhật bảng §25 của SPEC.
 
 ## Answer
+
+**2026-10-05** (chạy `docs/prototypes/m0_login_spike.sh` trên Windows rồi WSL root, tài khoản Gmail cá nhân):
+
+- **Q2 — đã trả lời: CÓ.** Máy 2 (WSL) đăng nhập cùng client thấy folder `Claude Sync (dev)` (id `1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`) và marker `.claude-sync-root` do máy 1 (Windows) tạo, tìm bằng `appProperties has {key='csSpike' and value='1'}`. Không cần phương án `folder set <id>`.
+- **Q1 — chưa xong.** Response đổi code có `refresh_token_expires_in = 604799` → app đang ở **Testing** (token hết hạn sau 7 ngày). Còn phải: Publish app, chạy lại spike trên một máy để thấy dòng "In production", và ghi lại Google có đòi URL trang chủ / chính sách riêng tư / domain không.
+- `prompt=consent` cần thiết: cả 2 máy đều nhận được `refresh_token`.
+- Folder thử `Claude Sync (dev)` giữ lại trên Drive để test M2; không phải folder gốc thật (key `csSpike`, không phải `csRoot`).

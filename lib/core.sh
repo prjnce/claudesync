@@ -91,7 +91,7 @@ cs_required_tools() {
 cs_install_hint() {
   local t pkgs=" "
   if [[ $CS_OS == windows ]]; then
-    printf 'install Git for Windows (https://gitforwindows.org); jq: winget install jqlang.jq\n'
+    cs_say boot.install_git
     return 0
   fi
   for t in "$@"; do
@@ -103,7 +103,7 @@ cs_install_hint() {
     [[ $pkgs == *" $t "* ]] || pkgs+="$t "
   done
   pkgs=${pkgs# }
-  printf 'sudo apt install %s\n' "${pkgs% }"
+  cs_say boot.install_apt "${pkgs% }"
 }
 
 # cs_check_tools: dies listing every missing tool plus an install hint.
@@ -114,11 +114,11 @@ cs_check_tools() {
     command -v "$t" >/dev/null 2>&1 || missing+=("$t")
   done < <(cs_required_tools)
   if ((${#missing[@]})); then
-    cs_die "$CS_EXIT_ERROR" "missing required tools: ${missing[*]} — $(cs_install_hint "${missing[@]}")"
+    cs_die_t "$CS_EXIT_ERROR" boot.missing_tools "${missing[*]}" "$(cs_install_hint "${missing[@]}")"
   fi
   # shellcheck disable=SC2185 # --version takes no path
-  find --version 2>/dev/null | grep -q 'GNU findutils' || cs_die "$CS_EXIT_ERROR" "GNU find is not first in PATH ($(command -v find))"
-  sort --version 2>/dev/null | grep -q 'GNU coreutils' || cs_die "$CS_EXIT_ERROR" "GNU sort is not first in PATH ($(command -v sort))"
+  find --version 2>/dev/null | grep -q 'GNU findutils' || cs_die_t "$CS_EXIT_ERROR" boot.gnu_tool find "$(command -v find)"
+  sort --version 2>/dev/null | grep -q 'GNU coreutils' || cs_die_t "$CS_EXIT_ERROR" boot.gnu_tool sort "$(command -v sort)"
 }
 
 # cs_pick_awk: CS_AWK = override (name or path) or gawk || mawk || awk, as an absolute path.
@@ -132,13 +132,19 @@ cs_pick_awk() {
   CS_AWK=$a
 }
 
-# cs_bootstrap: everything an entrypoint needs before doing real work (SPEC §3.2).
-cs_bootstrap() {
+# cs_bootstrap_ui: the minimum needed to talk to the user (help, usage errors): OS, locale, home, language.
+cs_bootstrap_ui() {
   cs_detect_os
   export LC_ALL=C
+  cs_set_home
+  cs_lang_init
+}
+
+# cs_bootstrap: everything an entrypoint needs before doing real work (SPEC §3.2).
+cs_bootstrap() {
+  cs_bootstrap_ui
   cs_check_tools
   cs_pick_awk
-  cs_set_home
   local proxy
   proxy=$(cs_config_get proxy "")
   if [[ -n $proxy && -z ${HTTPS_PROXY:-} ]]; then
@@ -203,8 +209,8 @@ cs_config_get() {
 # cs_config_set KEY VALUE: insert or replace one line, atomically. Keys are [a-z_][a-z0-9_]*.
 cs_config_set() {
   local key=$1 val=$2 file
-  [[ $key =~ ^[a-z_][a-z0-9_]*$ ]] || cs_die "$CS_EXIT_USAGE" "invalid config key: $key"
-  [[ $val != *$'\n'* && $val != *$'\r'* ]] || cs_die "$CS_EXIT_USAGE" "config value must be a single line"
+  [[ $key =~ ^[a-z_][a-z0-9_]*$ ]] || cs_die_t "$CS_EXIT_USAGE" config.bad_key "$key"
+  [[ $val != *$'\n'* && $val != *$'\r'* ]] || cs_die_t "$CS_EXIT_USAGE" config.multiline
   file=$(cs_config_file)
   mkdir -p -- "${file%/*}"
   [[ -f $file ]] || : >"$file"
@@ -213,3 +219,6 @@ cs_config_set() {
     { print }
     END { if (!done) print ENVIRON["K"] "=" ENVIRON["V"] }' "$file"
 }
+
+# shellcheck source=lib/i18n.sh
+source "${BASH_SOURCE[0]%/*}/i18n.sh"

@@ -19,29 +19,7 @@ unset cs_src cs_bin_dir
 source "$CS_APP_DIR/lib/core.sh"
 
 cs_usage() {
-  cat <<'EOF'
-usage: claude-sync <command> [args]
-
-  setup                         full setup wizard (re-runnable)
-  login [--device] | logout     sign in to / revoke Google Drive access
-  folder [show]                 root folder, marker, machines
-  projects ...                  list|select|pending|map|unmap|mode|exclude
-  sync [--pull-only|--push-only] [--project X] [--dry-run] [--verbose]
-  run [--trigger=...]           one non-interactive cycle (used by the service)
-  status [--json]               health, last/next run, behind, conflicts, waiting maps
-  conflicts [list|show <sid>]   forked sessions, losing memory/plan copies
-  restore <sid>                 reinstall a session removed by retention
-  repair [--dry-run]            fix legacy data (CRLF, spaced JSON, foreign cwd, duplicates)
-  service install|uninstall|status|kick
-  hooks install|uninstall
-  config get|set <key> <value>
-  machines [list|forget <name>]
-  claude [args...]              pull, then exec claude
-  doctor                        check dependencies and installation
-  logs [-f]
-  uninstall [--purge]
-  --version | help
-EOF
+  cs_say usage
 }
 
 cs_use() {
@@ -63,48 +41,58 @@ cmd_projects() {
     list)
       cs_use platform claude
       local slug n bytes cwd
-      printf '%-8s %-10s %-50s %s\n' SESSIONS SIZE 'LAUNCH CWD (newest session)' 'PROJECT DIR'
+      printf '%s %s %s %s\n' "$(cs_pad "$(cs_t projects.col_sessions)" 8)" "$(cs_pad "$(cs_t projects.col_size)" 10)" \
+        "$(cs_pad "$(cs_t projects.col_cwd)" 50)" "$(cs_t projects.col_dir)"
       while IFS=$'\t' read -r slug n bytes cwd; do
         [[ -n $slug ]] || continue
-        printf '%-8s %-10s %-50s %s\n' "$n" "$(cs_human_bytes "$bytes")" "$cwd" "$slug"
+        printf '%s %s %s %s\n' "$(cs_pad "$n" 8)" "$(cs_pad "$(cs_human_bytes "$bytes")" 10)" "$(cs_pad "$cwd" 50)" "$slug"
       done < <(cs_claude_projects_report)
       ;;
-    *) cs_die "$CS_EXIT_ERROR" "'projects $sub' is not implemented yet" ;;
+    *) cs_die_t "$CS_EXIT_ERROR" cli.not_implemented "projects $sub" ;;
   esac
+}
+
+# doctor_line TAG KEY [ARGS...]: "  TAG   message" (tags stay untranslated).
+doctor_line() {
+  local tag=$1
+  shift
+  printf '  %-5s %s\n' "$tag" "$(cs_t "$@")"
 }
 
 cmd_doctor() {
   cs_use platform claude
-  local problems=0 dir scan n dirs junk dups
-  printf 'claude-sync %s doctor\n' "$CS_VERSION"
-  printf '  OK    bash %s, awk %s, os %s%s\n' "$BASH_VERSION" "$CS_AWK" "$CS_OS" "$( ((CS_WSL)) && printf ' (WSL)')"
+  local problems=0 dir scan n dirs junk dups os=$CS_OS
+  ((CS_WSL)) && os+=' (WSL)'
+  cs_say doctor.title "$CS_VERSION"
+  doctor_line OK doctor.env "$BASH_VERSION" "$CS_AWK" "$os"
   dir=$(cs_claude_dir)
   if [[ -d $dir ]]; then
-    printf '  OK    Claude config dir: %s\n' "$dir"
+    doctor_line OK doctor.claude_dir "$dir"
   else
-    printf '  FAIL  Claude config dir not found: %s\n' "$dir"
+    doctor_line FAIL doctor.claude_dir_missing "$dir"
     return 1
   fi
   scan=$(cs_claude_scan)
   n=$(printf '%s' "$scan" | grep -c . || true)
   dirs=$(printf '%s\n' "$scan" | "$CS_AWK" -F'\t' 'NF { d[$1] = 1 } END { print length(d) + 0 }')
-  printf '  OK    %s sessions in %s project dirs\n' "$n" "$dirs"
-  printf '  OK    retention (cleanupPeriodDays, user settings): %s\n' "$(cs_claude_retention_days)"
+  doctor_line OK doctor.sessions "$n" "$dirs"
+  doctor_line OK doctor.retention "$(cs_claude_retention_days)"
   junk=$(cs_claude_junk_dirs)
   if [[ -n $junk ]]; then
-    while IFS= read -r d; do printf '  WARN  not a valid project dir (hijacks --resume): projects/%s\n' "$d"; done <<<"$junk"
+    while IFS= read -r d; do doctor_line WARN doctor.junk_dir "$d"; done <<<"$junk"
     problems=1
   fi
   dups=$(printf '%s\n' "$scan" | cs_claude_dup_ids /dev/stdin)
   if [[ -n $dups ]]; then
-    printf '  WARN  %s session ids exist in more than one project dir\n' "$(printf '%s\n' "$dups" | grep -c .)"
+    doctor_line WARN doctor.dup_ids "$(printf '%s\n' "$dups" | grep -c .)"
     problems=1
   fi
+  printf '\n'
   if ((problems)); then
-    printf '\nProblems found: run "claude-sync repair --dry-run" (repair is not implemented yet).\n'
+    cs_say doctor.problems
     return 1
   fi
-  printf '\nNo problems found.\n'
+  cs_say doctor.ok
 }
 
 main() {
@@ -114,6 +102,7 @@ main() {
       return 0
       ;;
     -h | --help | help)
+      cs_bootstrap_ui
       cs_usage
       return 0
       ;;
@@ -133,10 +122,11 @@ main() {
     setup | login | logout | folder | sync | run | status | conflicts | restore | repair | \
       service | hooks | config | machines | claude | logs | uninstall | kick)
       cs_bootstrap
-      cs_die "$CS_EXIT_ERROR" "'$cmd' is not implemented yet"
+      cs_die_t "$CS_EXIT_ERROR" cli.not_implemented "$cmd"
       ;;
     *)
-      printf 'claude-sync: unknown command: %s\n\n' "$cmd" >&2
+      cs_bootstrap_ui
+      printf 'claude-sync: %s\n\n' "$(cs_t cli.unknown_command "$cmd")" >&2
       cs_usage >&2
       return "$CS_EXIT_USAGE"
       ;;

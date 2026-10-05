@@ -1,6 +1,6 @@
 # claude-sync v1 — spec và bản đồ ticket
 
-Nguồn chuẩn: [docs/SPEC.md](../../docs/SPEC.md) (v1.1, 2026-10-05). File này **không chép lại spec**, chỉ ghi cách chia ticket và thứ tự phụ thuộc. Ticket mâu thuẫn với SPEC thì theo SPEC; SPEC mâu thuẫn với nghiên cứu thì theo `docs/research/cross-check.md`.
+Nguồn chuẩn: [docs/SPEC.md](../../docs/SPEC.md) (v1.2, 2026-10-05). File này **không chép lại spec**, chỉ ghi cách chia ticket và thứ tự phụ thuộc. Ticket mâu thuẫn với SPEC thì theo SPEC; SPEC mâu thuẫn với nghiên cứu thì theo `docs/research/cross-check.md`.
 
 ## Quy ước
 
@@ -48,6 +48,7 @@ Nguồn chuẩn: [docs/SPEC.md](../../docs/SPEC.md) (v1.1, 2026-10-05). File nà
 | 29 | [Setup hoàn chỉnh, doctor, config, uninstall](issues/29-setup-doctor-uninstall.md) | M6 | 12, 14, 15, 25, 26, 27, 31 | agent |
 | 30 | [E2E thật A1–A8, hiệu năng, README](issues/30-e2e-perf-readme.md) | M6 | 18–29, 31 | human |
 | 31 | [Phát hiện path mới, gợi ý và xác nhận map (§6.1)](issues/31-detect-new-paths-confirm-map.md) | M4 | 14, 17, 24 | agent |
+| 32 | [Ngôn ngữ giao diện en/vi (§20.1)](issues/32-ui-language-en-vi.md) | M1 | 05 | agent |
 
 ## Đường găng
 
