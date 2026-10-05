@@ -49,3 +49,5 @@ Theo đúng thứ tự §19:
 - Phát hiện thêm: bản "gốc" của `0a5d8407/subagents/agent-af1b02a0…` trong `.bak` cũng đã bị serialize lại → repair lần 1 để lại 161 dòng có dấu cách. Sửa: chỉ tin dòng gốc đã ở dạng gọn (có test); chạy lại → 161 dòng ghi lại bằng node (backup `repair-20261005T092808Z`).
 - Sau cùng: 0 giá trị path còn `/mnt/` trong TransFlow, 0 CR, 0 file có JSON dấu cách; `doctor`: "Không có vấn đề" (19 session, 2 thư mục project). Chỉ còn `/mnt/d` trong nội dung hội thoại (lịch sử, giữ nguyên theo §4.7).
 - Còn lại: người dùng thử `claude --resume <id>` (A8).
+
+**2026-10-05 — A8 đạt (người dùng xác nhận):** `claude --resume 1cafbcb6-…` (PowerShell, `D:\Projects\TransFlow`) mở đúng session, lịch sử đầy đủ; 3 session đã sửa khác (`e7cefe80`, `5e4425e3`, `0a5d8407`) mở bình thường trong VS Code. Claude chỉ ghi thêm metadata resume thường lệ (`history-suppression`, `system`).
