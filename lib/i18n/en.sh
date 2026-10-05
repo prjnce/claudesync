@@ -65,6 +65,47 @@ declare -gA CS_MSG_en=(
   [auth.logged_out]='Signed out: the token was revoked and removed from this machine.'
   [auth.client_installed]='OAuth client saved to %s'
 
+  [setup.h_lang]='Step 0 - Language'
+  [setup.ask_lang]='Language / Ngôn ngữ: 1 = English, 2 = Tiếng Việt'
+  [setup.h_deps]='Step 1 - Dependencies'
+  [setup.deps_ok]='All required tools found (bash %s, awk %s).'
+  [setup.no_python]='Note: python3 is missing; sign-in will ask you to paste the final browser address instead.'
+  [setup.no_git]='Note: git is missing; conflicting memory edits will keep the local copy and save the other one aside.'
+  [setup.h_client]='Step 2 - Google OAuth client'
+  [setup.client_have]='An OAuth client is already installed (%s).'
+  [setup.ask_client_replace]='Replace it with another client JSON? (y/n)'
+  [setup.client_guide]='claude-sync uses your own Google OAuth client (create it once, then copy the same JSON to every machine):
+  1. console.cloud.google.com -> create a project, e.g. "claude-sync".
+  2. APIs & Services -> enable "Google Drive API".
+  3. Google Auth Platform -> Branding: app name and support email.
+  4. Audience: External -> add yourself as a test user -> PUBLISH APP (otherwise sign-ins expire after 7 days).
+  5. Data access: add the scope .../auth/drive.file.
+  6. Clients -> Create client -> Desktop app -> download the JSON right away.'
+  [setup.ask_client_path]='Path to the downloaded client JSON'
+  [setup.h_proxy]='Step 3 - Proxy'
+  [setup.ask_proxy]='HTTPS proxy for Google APIs ("-" for none)'
+  [setup.h_login]='Step 4 - Sign in to Google Drive'
+  [setup.ask_relogin]='Sign in again with another account? (y/n)'
+  [setup.h_root]='Step 5 - Root folder on Google Drive'
+  [setup.ask_root_name]='No claude-sync folder exists yet. Name of the folder to create in My Drive'
+  [setup.root_created]='Created "%s" with its marker.'
+  [setup.root_found]='Found the existing claude-sync folder "%s".'
+  [setup.root_many]='Found %s claude-sync folders; using the oldest, "%s". Others:'
+  [setup.root_summary]='Account: %s
+  Folder:  %s
+  Link:    %s
+  Machines already joined:'
+  [setup.no_machines]='    (none yet: this is the first machine)'
+  [setup.h_machine]='Step 6 - This machine'
+  [setup.ask_machine_name]='Name of this machine'
+  [setup.owner_conflict]='%s says another claude-sync install (machine %s) manages this Claude config dir. Refusing to take it over.'
+  [setup.machine_done]='This machine is "%s" (%s).'
+  [setup.bad_step]='unknown setup step: %s (steps: %s)'
+  [setup.step_failed]='setup step "%s" failed; fix the problem and run "claude-sync setup" again (finished steps are kept).'
+  [setup.done_so_far]='Steps 0-6 are done. Choosing projects, the schedule and the first sync come in the next version.'
+  [folder.not_set]='No root folder is set up yet: run "claude-sync setup".'
+  [folder.missing]='The root folder %s is missing or in the trash (ROOT_MISSING). claude-sync will not recreate it on its own.'
+
   [projects.col_sessions]='SESSIONS'
   [projects.col_size]='SIZE'
   [projects.col_cwd]='LAUNCH CWD (newest session)'

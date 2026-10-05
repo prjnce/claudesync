@@ -65,6 +65,47 @@ declare -gA CS_MSG_vi=(
   [auth.logged_out]='Đã đăng xuất: token đã bị thu hồi và xoá khỏi máy này.'
   [auth.client_installed]='Đã lưu OAuth client vào %s'
 
+  [setup.h_lang]='Bước 0 - Ngôn ngữ'
+  [setup.ask_lang]='Language / Ngôn ngữ: 1 = English, 2 = Tiếng Việt'
+  [setup.h_deps]='Bước 1 - Công cụ cần thiết'
+  [setup.deps_ok]='Đã có đủ công cụ (bash %s, awk %s).'
+  [setup.no_python]='Lưu ý: thiếu python3; khi đăng nhập bạn sẽ cần dán địa chỉ cuối cùng trên trình duyệt.'
+  [setup.no_git]='Lưu ý: thiếu git; khi memory bị sửa xung đột, bản local được giữ và bản kia được lưu riêng.'
+  [setup.h_client]='Bước 2 - Google OAuth client'
+  [setup.client_have]='Đã có OAuth client (%s).'
+  [setup.ask_client_replace]='Thay bằng file JSON client khác? (c/k)'
+  [setup.client_guide]='claude-sync dùng OAuth client của riêng bạn (tạo một lần, rồi chép cùng file JSON sang mọi máy):
+  1. console.cloud.google.com -> tạo project, ví dụ "claude-sync".
+  2. APIs & Services -> bật "Google Drive API".
+  3. Google Auth Platform -> Branding: tên app và email hỗ trợ.
+  4. Audience: External -> thêm chính bạn làm test user -> PUBLISH APP (nếu không, đăng nhập hết hạn sau 7 ngày).
+  5. Data access: thêm scope .../auth/drive.file.
+  6. Clients -> Create client -> Desktop app -> tải file JSON ngay.'
+  [setup.ask_client_path]='Đường dẫn tới file JSON client đã tải'
+  [setup.h_proxy]='Bước 3 - Proxy'
+  [setup.ask_proxy]='HTTPS proxy để gọi Google API ("-" nếu không dùng)'
+  [setup.h_login]='Bước 4 - Đăng nhập Google Drive'
+  [setup.ask_relogin]='Đăng nhập lại bằng tài khoản khác? (c/k)'
+  [setup.h_root]='Bước 5 - Folder gốc trên Google Drive'
+  [setup.ask_root_name]='Chưa có folder claude-sync nào. Tên folder sẽ tạo trong My Drive'
+  [setup.root_created]='Đã tạo "%s" cùng file marker.'
+  [setup.root_found]='Đã tìm thấy folder claude-sync có sẵn: "%s".'
+  [setup.root_many]='Tìm thấy %s folder claude-sync; dùng folder cũ nhất, "%s". Các folder khác:'
+  [setup.root_summary]='Tài khoản: %s
+  Folder:    %s
+  Link:      %s
+  Các máy đã tham gia:'
+  [setup.no_machines]='    (chưa có: đây là máy đầu tiên)'
+  [setup.h_machine]='Bước 6 - Máy này'
+  [setup.ask_machine_name]='Tên của máy này'
+  [setup.owner_conflict]='%s cho biết một bản cài claude-sync khác (máy %s) đang quản lý thư mục config Claude này. Không chiếm quyền.'
+  [setup.machine_done]='Máy này là "%s" (%s).'
+  [setup.bad_step]='bước setup không tồn tại: %s (các bước: %s)'
+  [setup.step_failed]='bước setup "%s" bị lỗi; sửa lỗi rồi chạy lại "claude-sync setup" (các bước đã xong được giữ lại).'
+  [setup.done_so_far]='Đã xong bước 0-6. Chọn project, lập lịch và lần sync đầu sẽ có ở phiên bản sau.'
+  [folder.not_set]='Chưa thiết lập folder gốc: hãy chạy "claude-sync setup".'
+  [folder.missing]='Folder gốc %s không còn hoặc đang ở thùng rác (ROOT_MISSING). claude-sync sẽ không tự tạo lại.'
+
   [projects.col_sessions]='SESSION'
   [projects.col_size]='DUNG LƯỢNG'
   [projects.col_cwd]='THƯ MỤC KHỞI CHẠY (session mới nhất)'

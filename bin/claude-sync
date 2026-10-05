@@ -121,6 +121,30 @@ cmd_login() {
   fi
 }
 
+cmd_setup() {
+  cs_use platform version store claude drive root ui setup
+  cs_setup "$@"
+}
+
+cmd_folder() {
+  local sub=${1:-show}
+  [[ $sub == show ]] || cs_die_t "$CS_EXIT_USAGE" cli.unknown_command "folder $sub"
+  cs_use platform version store claude drive root
+  local rid name who machines
+  rid=$(cs_config_get root_id "")
+  [[ -n $rid ]] || cs_die_t "$CS_EXIT_ERROR" folder.not_set
+  cs_root_check || cs_die_t "$CS_EXIT_ERROR" folder.missing "$rid"
+  name=$(drv_get_meta "$rid" | cs_jq -r .name)
+  who=$(drv_about_user 2>/dev/null) || who='?'
+  cs_say setup.root_summary "$who" "$name" "$(cs_root_link "$rid")"
+  machines=$(cs_machines_list "$rid") || machines=
+  if [[ -n $machines ]]; then
+    while IFS=$'\t' read -r m nm os; do printf '    %s (%s) %s\n' "$nm" "$os" "$m"; done <<<"$machines"
+  else
+    cs_say setup.no_machines
+  fi
+}
+
 cmd_logout() {
   cs_use platform version drive
   cs_auth_logout
@@ -159,7 +183,15 @@ main() {
       cs_bootstrap
       cmd_logout "$@"
       ;;
-    setup | folder | sync | run | status | conflicts | restore | repair | \
+    setup)
+      cs_bootstrap
+      cmd_setup "$@"
+      ;;
+    folder)
+      cs_bootstrap
+      cmd_folder "$@"
+      ;;
+    sync | run | status | conflicts | restore | repair | \
       service | hooks | config | machines | claude | logs | uninstall | kick)
       cs_bootstrap
       cs_die_t "$CS_EXIT_ERROR" cli.not_implemented "$cmd"
