@@ -17,8 +17,16 @@ cs_b64url() {
   base64 -w0 | tr '+/' '-_' | tr -d '='
 }
 
+# cs_urlenc S: percent-encode S. jq 1.6 leaves !*'() unencoded and jq 1.7 does not, so encode them
+# explicitly: the same input gives the same URL on every machine.
 cs_urlenc() {
-  jq -rn --arg v "$1" '$v | @uri' | tr -d '\r'
+  local s
+  s=$(jq -rn --arg v "$1" '$v | @uri' | tr -d '\r')
+  s=${s//\!/%21}
+  s=${s//\*/%2A}
+  s=${s//\'/%27}
+  s=${s//\(/%28}
+  printf '%s\n' "${s//\)/%29}"
 }
 
 # cs_qs_get QUERY KEY: percent-decoded value of KEY in an application/x-www-form-urlencoded QUERY.
@@ -199,27 +207,40 @@ cs_oauth_exchange() {
   cs_log info "login: token stored"
 }
 
-# cs_access_token: a valid access token on stdout, refreshed (under the fd-8 lock) when it expires
-# within 60 s. rc 3 = login required, 6 = network.
-cs_access_token() {
-  local tok now exp
-  tok=$(cs_token_load) || return "$CS_EXIT_LOGIN"
-  now=$(date +%s)
-  exp=$(cs_jq -r '.expires_at // 0' <<<"$tok")
-  if ((exp > now + 60)); then
-    cs_jq -r .access_token <<<"$tok"
+# cs_token_fresh_enough TOKEN_JSON [REJECTED]: rc 0 if the access token is valid for 60 s more and is not
+# the one the API just rejected.
+cs_token_fresh_enough() {
+  local exp at
+  exp=$(cs_jq -r '.expires_at // 0' <<<"$1")
+  at=$(cs_jq -r '.access_token // empty' <<<"$1")
+  [[ -n $at && $at != "${2:-}" ]] && ((exp > $(date +%s) + 60))
+}
+
+# cs_access_token_ensure [REJECTED_TOKEN]: set CS_ACCESS_TOKEN in the CURRENT shell (call it directly, not
+# in $(...), so the decrypted token stays cached: DPAPI costs ~0.7 s per decryption). Refreshes under the
+# fd-8 lock when the token expires within 60 s or equals REJECTED_TOKEN (the API answered 401).
+# rc 3 = login required, 6 = network.
+cs_access_token_ensure() {
+  local rejected=${1:-} tok
+  if [[ -z ${CS_TOKEN_CACHE:-} ]]; then
+    CS_TOKEN_CACHE=$(cs_token_load) || {
+      CS_TOKEN_CACHE=
+      return "$CS_EXIT_LOGIN"
+    }
+  fi
+  if cs_token_fresh_enough "$CS_TOKEN_CACHE" "$rejected"; then
+    CS_ACCESS_TOKEN=$(cs_jq -r .access_token <<<"$CS_TOKEN_CACHE")
     return 0
   fi
   exec 8>>"$CS_HOME/token.lock"
   cs_lock_fd 8 30 || return 6
-  # Another process may have refreshed while we waited.
+  # Another process may have refreshed while we waited: reload from disk.
   CS_TOKEN_CACHE=
   tok=$(cs_token_load) || {
     exec 8>&-
     return "$CS_EXIT_LOGIN"
   }
-  exp=$(cs_jq -r '.expires_at // 0' <<<"$tok")
-  if ((exp <= $(date +%s) + 60)); then
+  if ! cs_token_fresh_enough "$tok" "$rejected"; then
     local resp code body rt rc
     cs_client_load
     rt=$(cs_jq -r .refresh_token <<<"$tok")
@@ -237,7 +258,15 @@ cs_access_token() {
     cs_token_save "$tok"
   fi
   exec 8>&-
-  cs_jq -r .access_token <<<"$tok"
+  CS_TOKEN_CACHE=$tok
+  CS_ACCESS_TOKEN=$(cs_jq -r .access_token <<<"$tok")
+}
+
+# cs_access_token [REJECTED_TOKEN]: cs_access_token_ensure, then print the token (convenience for tests
+# and one-off callers; prefer _ensure in loops).
+cs_access_token() {
+  cs_access_token_ensure "$@" || return
+  printf '%s\n' "$CS_ACCESS_TOKEN"
 }
 
 # --- loopback listener ------------------------------------------------------------------------------------

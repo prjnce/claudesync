@@ -152,7 +152,7 @@ mock() { # mock NAME JSON -> file:// URL serving JSON
 
 @test "full login without a browser: callback hits the loopback listener, token is stored, logout revokes" {
   cs_client_install "$T/client.json"
-  export CS_OAUTH_TOKEN_EP CS_OAUTH_REVOKE_EP CS_NO_BROWSER=1 CS_LOGIN_TIMEOUT=60
+  export CS_OAUTH_TOKEN_EP CS_OAUTH_REVOKE_EP CS_NO_BROWSER=1 CS_LOGIN_TIMEOUT=60 CS_DRIVE_BACKEND=localfs CS_LFS_ROOT="$T/drive"
   CS_OAUTH_TOKEN_EP=$(mock tok '{"access_token":"AT9","refresh_token":"RT9","expires_in":3599,"scope":"https://www.googleapis.com/auth/drive.file"}')
   CS_OAUTH_REVOKE_EP=$(mock revoke '{}')
   # The "browser": wait for the printed consent URL, then call the redirect URI with code and state.
@@ -168,7 +168,7 @@ mock() { # mock NAME JSON -> file:// URL serving JSON
   wait "$helper"
   cat "$T/login.out"
   grep -q '^rc=0$' "$T/login.out"
-  grep -q 'Signed in' "$T/login.out"
+  grep -q 'Signed in as: Local Test <test@localhost>' "$T/login.out"
   CS_TOKEN_CACHE=
   [ "$(cs_token_load | jq -r .refresh_token | tr -d '\r')" = RT9 ]
   run cli logout

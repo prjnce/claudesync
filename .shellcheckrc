@@ -7,3 +7,6 @@ disable=SC2034
 disable=SC2016
 # Functions invoked indirectly (job runner, traps).
 disable=SC2317
+# drv_* wrappers forward "$@" to the backend; many callers pass no arguments.
+disable=SC2119
+disable=SC2120

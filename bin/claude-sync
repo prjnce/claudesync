@@ -96,7 +96,7 @@ cmd_doctor() {
 }
 
 cmd_login() {
-  cs_use platform version auth
+  cs_use platform version drive
   local client=
   while (($#)); do
     case $1 in
@@ -113,15 +113,16 @@ cmd_login() {
     cs_say auth.client_installed "$(cs_client_file)"
   fi
   cs_auth_login || exit "$?"
-  if declare -F cs_drive_whoami >/dev/null; then
-    cs_say auth.signed_in_as "$(cs_drive_whoami)"
+  local who
+  if who=$(cs_drive_whoami 2>/dev/null) && [[ -n $who ]]; then
+    cs_say auth.signed_in_as "$who"
   else
     cs_say auth.signed_in
   fi
 }
 
 cmd_logout() {
-  cs_use platform version auth
+  cs_use platform version drive
   cs_auth_logout
   cs_say auth.logged_out
 }

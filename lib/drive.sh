@@ -25,7 +25,10 @@ cs_drv() {
   shift
   case ${CS_DRIVE_BACKEND:-gdrive} in
     localfs) "cs_lfs_$op" "$@" ;;
-    gdrive) "cs_gd_$op" "$@" ;;
+    gdrive)
+      cs_gd_tmp >/dev/null # create the scratch dir in this shell, before any $(...) inside the call
+      "cs_gd_$op" "$@"
+      ;;
     *) cs_die "$CS_EXIT_ERROR" "unknown CS_DRIVE_BACKEND=${CS_DRIVE_BACKEND}" ;;
   esac
 }
@@ -235,3 +238,13 @@ cs_lfs_about_user() {
   cs_lfs_maybe_fail about_user || return
   printf '%s\n' "${CS_LFS_USER:-Local Test <test@localhost>}"
 }
+
+# cs_drive_whoami: "Name <email>" of the signed-in account (shown after login).
+cs_drive_whoami() {
+  drv_about_user
+}
+
+# shellcheck source=lib/auth.sh
+source "${BASH_SOURCE[0]%/*}/auth.sh"
+# shellcheck source=lib/gdrive.sh
+source "${BASH_SOURCE[0]%/*}/gdrive.sh"

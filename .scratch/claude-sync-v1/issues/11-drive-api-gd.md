@@ -22,3 +22,10 @@ Backend `drive_backend=gdrive` hiện thực giao diện `drv_*` của #09 bằn
 - [ ] Bộ contract test của #09 pass với Drive thật (job thủ công, dùng folder thử riêng).
 - [ ] Test resumable: kill giữa chừng rồi chạy lại → upload tiếp từ URI đã lưu, md5 khớp.
 - [ ] Test: response có CR (jq native trên Windows) vẫn parse đúng.
+
+## Comments
+
+**2026-10-05 — Claude:** Code xong, chờ chạy contract test với Drive thật (cần `claude-sync login`).
+- `lib/gdrive.sh`: `cs_gd` (401 → refresh 1 lần; 403 rateLimit/429/5xx → backoff mũ + jitter, tối đa `CS_GD_RETRIES`; 404→4, 409→9, mạng→6; `GD_OUT` tải thẳng vào file đích), multipart ≤ 5 MB với metadata đọc từ file (`-F metadata=<file`), resumable theo chunk 8 MiB đẩy thẳng từ file nguồn qua stdin (không tạo file tạm — SPEC R2), chạy tiếp từ URI đã lưu (`CS_GD_RESUME_FILE`), kiểm `md5Checksum` sau mỗi lần ghi, phân trang list/changes, `newStartPageToken` lấy từ trang cuối (không xin token mới — tránh mất thay đổi), giờ server từ header `Date`.
+- `lib/auth.sh`: `cs_access_token_ensure [REJECTED]` giữ token đã giải mã trong shell hiện tại (DPAPI ~0,7 s/lần) và ép refresh khi API trả 401.
+- Test: `test/gdrive_unit.bats` (16, curl giả chạy theo kịch bản), `test/drive_contract.bats` (đổi tên từ `drive_localfs.bats`; chạy được với `CS_TEST_GDRIVE=1`, chỉ trong folder con tạm của "Claude Sync (dev)", trash sau mỗi test).
