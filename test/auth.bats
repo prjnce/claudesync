@@ -107,6 +107,27 @@ mock() { # mock NAME JSON -> file:// URL serving JSON
   [ "$(cs_token_load | jq -r '.refresh_token + " " + .access_token' | tr -d '\r')" = 'RT NEW' ]
 }
 
+@test "two processes needing a refresh at the same time refresh only once (fd-8 lock)" {
+  cs_client_install "$T/client.json"
+  cs_token_save '{"refresh_token":"RT","access_token":"OLD","expires_at":1}'
+  CS_OAUTH_TOKEN_EP=$(mock refresh '{"access_token":"NEW","expires_in":3599}')
+  eval "orig_$(declare -f cs_oauth_post)"
+  cs_oauth_post() {
+    printf 'call\n' >>"$T/calls"
+    sleep 1 # widen the race window
+    orig_cs_oauth_post "$@"
+  }
+  (CS_TOKEN_CACHE= cs_access_token >"$T/a1") 3>&- &
+  p1=$!
+  (CS_TOKEN_CACHE= cs_access_token >"$T/a2") 3>&- &
+  p2=$!
+  wait "$p1"
+  wait "$p2"
+  [ "$(cat "$T/a1")" = NEW ]
+  [ "$(cat "$T/a2")" = NEW ]
+  [ "$(wc -l <"$T/calls")" -eq 1 ]
+}
+
 @test "access token: revoked refresh token means login required (F6), no endless retry" {
   cs_client_install "$T/client.json"
   cs_token_save '{"refresh_token":"RT","access_token":"OLD","expires_at":1}'
