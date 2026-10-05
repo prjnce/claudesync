@@ -10,7 +10,7 @@ load test_helper
 
 setup() {
   cs_test_setup
-  cs_load version drive
+  cs_load platform version drive
   T=$BATS_TEST_TMPDIR
   printf 'hello\n' >"$T/a.txt"
   printf 'other\n' >"$T/b.txt"
@@ -24,9 +24,13 @@ setup() {
     mkdir -p "$CLAUDE_SYNC_HOME"
     cp "$src/oauth-client.json" "$CLAUDE_SYNC_HOME/"
     cp "$src"/token.* "$CLAUDE_SYNC_HOME/"
-    local dev
-    dev=$(drv_find_by_prop csSpike 1 | head -n 1 | cs_jq -r .id)
-    [[ -n $dev ]] || skip "no 'Claude Sync (dev)' folder (run docs/prototypes/m0_login_spike.sh first)"
+    local dev='' try rc=0
+    for try in 1 2 3; do
+      dev=$(drv_find_by_prop csSpike 1 | head -n 1 | cs_jq -r .id) && rc=0 || rc=$?
+      [[ -n $dev ]] && break
+      sleep 2
+    done
+    [[ -n $dev ]] || skip "no 'Claude Sync (dev)' folder found (rc=$rc; run docs/prototypes/m0_login_spike.sh first)"
     P=$(drv_create_folder "$dev" "contract-$(date -u +%Y%m%dT%H%M%S)-$RANDOM" '{}' | cs_jq -r .id)
   else
     BACKEND=localfs
@@ -135,7 +139,12 @@ jf() { cs_jq -r "$1" <<<"$2"; }
   [[ $(tail -n 1 <<<"$out") == "TOKEN "* ]]
   new=$(tail -n 1 <<<"$out")
   new=${new#TOKEN }
-  ! drv_changes_list "$new" | grep -qx "$a"
+  run drv_changes_list "$new"
+  [ "$status" -eq 0 ]
+  [[ ${lines[-1]} == "TOKEN "* ]]
+  # localfs never repeats a change; real Drive may report a file again while it finishes processing it,
+  # so the engine must tolerate repeats (it compares manifests, never trusts the feed alone).
+  if [[ $BACKEND == localfs ]]; then ! printf '%s\n' "${lines[@]}" | grep -qx "$a"; fi
 }
 
 @test "server time is an ISO UTC timestamp" {

@@ -35,3 +35,8 @@ Spec: SPEC §5.2 (`.claude-sync-owner`), §6 (machine_id), §9.1, §16 bước 1
 - `lib/setup.sh` + `lib/ui.sh`: wizard bước 0–6 (`lang deps client proxy login root machine`), chạy lại được, `setup --step <tên>`; câu hỏi ra stderr, trả lời từ stdin (test bằng câu trả lời pipe vào); proxy WinINET đọc qua `reg.exe query`. CLI: `setup`, `folder [show]`.
 - 11 test (localfs, 2 "máy" dùng chung Drive giả): máy 2 tìm thấy root của máy 1 và tham gia, chạy lại setup không tạo root/máy mới (**F7**), owner file (**F12**), root bị trash → ROOT_MISSING.
 - Còn lại: người dùng chạy `setup` thật trên Windows và WSL; chạy `CS_TEST_GDRIVE=1` contract test với Drive thật.
+
+**2026-10-05 — Claude (kiểm thật, điểm duyệt 3):** Người dùng chạy `claude-sync setup` thật:
+- Windows (Git Bash, tiếng Việt): đăng nhập qua trình duyệt tự mở, tạo "Claude Sync" (`1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`) + marker, máy `Frank-PC`.
+- WSL (user `frank`, tiếng Anh): listener python3 trong WSL nhận callback từ trình duyệt Windows (không cần dán URL); bước 5 "Found the existing claude-sync folder" và liệt kê `Frank-PC (windows)`; máy `Frank-WSL-Officer`.
+- → Tiêu chí xong M2 đạt. Lưu ý: WSL chạy bằng `frank`, trong khi Claude thật trong WSL chạy bằng `root` → máy thật cho E2E là `root` (cần setup riêng sau).

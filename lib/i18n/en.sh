@@ -91,7 +91,7 @@ declare -gA CS_MSG_en=(
   [setup.root_created]='Created "%s" with its marker.'
   [setup.root_found]='Found the existing claude-sync folder "%s".'
   [setup.root_many]='Found %s claude-sync folders; using the oldest, "%s". Others:'
-  [setup.root_summary]='Account: %s
+  [setup.root_summary]='  Account: %s
   Folder:  %s
   Link:    %s
   Machines already joined:'

@@ -7,6 +7,12 @@
 [[ -n ${CS_AUTH_LOADED:-} ]] && return 0
 CS_AUTH_LOADED=1
 
+# Dependencies (no-ops when already loaded).
+# shellcheck source=lib/platform.sh
+source "${BASH_SOURCE[0]%/*}/platform.sh"
+# shellcheck source=lib/version.sh
+source "${BASH_SOURCE[0]%/*}/version.sh"
+
 CS_OAUTH_AUTH_EP=${CS_OAUTH_AUTH_EP:-https://accounts.google.com/o/oauth2/v2/auth}
 CS_OAUTH_TOKEN_EP=${CS_OAUTH_TOKEN_EP:-https://oauth2.googleapis.com/token}
 CS_OAUTH_REVOKE_EP=${CS_OAUTH_REVOKE_EP:-https://oauth2.googleapis.com/revoke}

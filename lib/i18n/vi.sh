@@ -91,7 +91,7 @@ declare -gA CS_MSG_vi=(
   [setup.root_created]='Đã tạo "%s" cùng file marker.'
   [setup.root_found]='Đã tìm thấy folder claude-sync có sẵn: "%s".'
   [setup.root_many]='Tìm thấy %s folder claude-sync; dùng folder cũ nhất, "%s". Các folder khác:'
-  [setup.root_summary]='Tài khoản: %s
+  [setup.root_summary]='  Tài khoản: %s
   Folder:    %s
   Link:      %s
   Các máy đã tham gia:'
