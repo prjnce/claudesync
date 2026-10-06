@@ -26,6 +26,11 @@ load test_helper
   [ -z "$bad" ] || { printf 'not executable in git: %s\n' $bad; return 1; }
 }
 
+@test "test names are plain ASCII (bats on the Windows runner cannot look up other names)" {
+  run bash -c 'LC_ALL=C grep -n "^@test.*[^ -~]" "$1"/test/*.bats' _ "$CS_ROOT"
+  [ -z "$output" ] || { echo "$output"; return 1; }
+}
+
 @test "entrypoints use the portable bash shebang" {
   for f in "$CS_ROOT/bin/claude-sync" "$CS_ROOT/test/run-all.sh"; do
     [ "$(head -n 1 "$f")" = '#!/usr/bin/env bash' ]

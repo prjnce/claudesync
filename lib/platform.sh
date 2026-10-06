@@ -57,14 +57,38 @@ $script"
 #   LA(e) = k(e) if k(e).length <= 200
 #           else k(e).slice(0,200) + "-" + Math.abs(F7(e)).toString(36)
 #   F7(e) = h=(h<<5)-h+charCodeAt(i)|0 over UTF-16 code units of the ORIGINAL string
-# Pure bash (no forks). Iterates code points under C.UTF-8. Input must be valid UTF-8.
+# Pure bash (no forks). UTF-8 is decoded byte by byte under LC_ALL=C, so the result never depends on the
+# shell's wide-character support (MSYS builds differ on characters outside the BMP: a CI runner hashed
+# emoji differently from a local Git Bash). Invalid bytes count as U+FFFD, as in Node.
 cc_slug() {
-  local LC_ALL=C.UTF-8
-  local s=$1 out='' ch i n cp h=0 hi lo q r digits=0123456789abcdefghijklmnopqrstuvwxyz b36=''
+  local LC_ALL=C
+  local s=$1 out='' ch i=0 n cp h=0 hi lo q r digits=0123456789abcdefghijklmnopqrstuvwxyz b36='' b k len
   n=${#s}
-  for ((i = 0; i < n; i++)); do
+  while ((i < n)); do
     ch=${s:i:1}
-    printf -v cp '%d' "'$ch"
+    printf -v b '%d' "'$ch"
+    b=$((b & 0xFF))
+    if ((b < 0x80)); then
+      cp=$b len=1
+    elif ((b >= 0xC2 && b <= 0xDF)); then
+      cp=$((b & 0x1F)) len=2
+    elif ((b >= 0xE0 && b <= 0xEF)); then
+      cp=$((b & 0x0F)) len=3
+    elif ((b >= 0xF0 && b <= 0xF4)); then
+      cp=$((b & 0x07)) len=4
+    else
+      cp=0xFFFD len=1
+    fi
+    for ((k = 1; k < len; k++)); do
+      printf -v b '%d' "'${s:i+k:1}"
+      b=$((b & 0xFF))
+      if ((i + k >= n || (b & 0xC0) != 0x80)); then # truncated sequence
+        cp=0xFFFD len=$k
+        break
+      fi
+      cp=$(((cp << 6) | (b & 0x3F)))
+    done
+    i=$((i + len))
     if ((cp >= 0x10000)); then # non-BMP: a surrogate pair is 2 code units
       hi=$((0xD800 + ((cp - 0x10000) >> 10)))
       lo=$((0xDC00 + ((cp - 0x10000) & 0x3FF)))

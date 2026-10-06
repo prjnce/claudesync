@@ -40,7 +40,7 @@ native() { cs_native_path "$1"; }
   cs_path_under '/home/u/X' '/home/u/X'
 }
 
-@test "git remote normalization: every credential form gives the same key input (SPEC §6.2)" {
+@test "git remote normalization: every credential form gives the same key input (SPEC 6.2)" {
   for u in 'https://github.com/Owner/Repo.git' 'https://user:ghp_secret123@github.com/owner/repo' \
     'https://oauth2:glpat-xyz@github.com/owner/repo/' 'git@github.com:owner/repo.git' \
     'ssh://git@github.com:22/owner/repo' 'https://github.com/owner/repo?x=1#frag'; do
