@@ -48,3 +48,10 @@ Không suy ra được path ở máy nhận một cách chắc chắn, nên engi
 - [ ] Chọn path lồng trong root của project khác → cảnh báo, phải xác nhận lần 2.
 - [ ] Sau khi map: session `waiting_map` được cài vào đúng thư mục slug, cwd được dịch sang root mới.
 - [ ] Bước tìm ứng viên không vượt giới hạn thời gian khi `scan_dirs` có hàng nghìn thư mục.
+
+## Comments
+
+**2026-10-06 — quyết định của người dùng (SPEC §6.1 đã cập nhật):** ở chế độ `all`, thư mục local mới không giống project nào → **tự thêm** thành project mới (ghi log + báo trong `status`); thư mục mới giống project đã có (cùng `remote_keys` / ứng viên tên-path) → hỏi gộp làm root phụ; project từ máy khác → luôn hỏi thư mục. Chế độ `selected` → không tự thêm gì. Cần thêm tiêu chí nghiệm thu:
+- [ ] `mode all`: mở Claude trong thư mục mới hoàn toàn → chu kỳ sau thư mục đó thành project và session được công bố, không cần người dùng làm gì.
+- [ ] `mode all`: thư mục mới cùng git remote với project đã có → không tự thêm, xuất hiện trong `projects pending` với gợi ý "root phụ".
+- [ ] `mode selected`: thư mục mới chỉ hiện trong `projects list` mục chưa sync.
