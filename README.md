@@ -4,6 +4,8 @@
 
 <p align="center">Keep your Claude Code sessions in sync across Windows, Linux and WSL through your own Google Drive.</p>
 
+<p align="center"><b>English</b> · <a href="README.vi.md">Tiếng Việt</a></p>
+
 ---
 
 > **Status: early development (v0.1.0-dev).** Setup, sign-in, project mapping, legacy-data repair and the
