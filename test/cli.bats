@@ -32,7 +32,7 @@ setup() { cs_test_setup; }
 }
 
 @test "known but unimplemented command exits 1" {
-  run cli status
+  run cli conflicts
   [ "$status" -eq 1 ]
   [[ $output == *"not implemented"* ]]
 }

@@ -8,7 +8,7 @@
 # Local state: state/sessions.tsv (DB row per session), state/entries/<sid>.json (entry of our base
 # version), state/manifest.json (our manifest), state/remote/<mid>.json (others' manifests),
 # cache/segs/<sha>.gz (downloaded segments).
-# Requires core, platform, version, manifest, store, claude, transform, projects, drive, root.
+# Requires core, platform, version, manifest, store, claude, transform, projects, drive, root, status.
 
 [[ -n ${CS_ENGINE_LOADED:-} ]] && return 0
 CS_ENGINE_LOADED=1
@@ -207,7 +207,7 @@ cs_eng_seg_fetch() {
 # cs_eng_publish SID FILE PROJECT DIR PREV_LEN [RESTART]: append our new complete lines as one segment, or
 # (RESTART=1, a rewrite) publish the whole content as a new chain that records the old versions in from[].
 cs_eng_publish() {
-  local sid=$1 f=$2 pid=$3 dir=$4 prev=${5:-0} restart=${6:-0} L seg sha len lines id jr entry seq launch man size mt
+  local sid=$1 f=$2 pid=$3 dir=$4 prev=${5:-0} restart=${6:-0} rc L seg sha len lines id jr entry seq launch man size mt
   L=$(cs_complete_len "$f")
   ((restart)) && prev=0
   ((L > prev)) || return 0
@@ -221,9 +221,10 @@ cs_eng_publish() {
   jr=$(cs_journal_begin publish "$(cs_jq -nc --arg s "$sid" --arg i "$id" --arg t "$seg" '{sid: $s, id: $i, tmp: [$t]}')")
   drv_upload "$CS_MY_AREA" "t-$sid-$seq-${sha:0:16}.jsonl.gz" "$seg" \
     "{\"csKind\":\"seg\",\"csSha\":\"$sha\",\"csSid\":\"$sid\"}" "$id" >/dev/null || {
+    rc=$?
     cs_journal_end "$jr"
     rm -f -- "$seg"
-    return 1
+    return "$rc"
   }
   if ((restart)); then
     entry=$(cs_entry_restart "$sid" "$entry" "$CS_ME" "$id" "$len" "$lines" "$sha")
@@ -517,6 +518,61 @@ cs_eng_pick() {
   printf 'CONFLICT\t%s\n' "${cm[0]}"
 }
 
+# --- run outcome -----------------------------------------------------------------------------------------
+
+# cs_eng_note_rc RC: remember the worst Drive failure of this run (3 login, 6 network) and count failures.
+cs_eng_note_rc() {
+  CS_RUN_FAILS=$((CS_RUN_FAILS + 1))
+  case $1 in
+    3) CS_RUN_DRV_RC=3 ;;
+    6) ((CS_RUN_DRV_RC == 3)) || CS_RUN_DRV_RC=6 ;;
+  esac
+  return 0
+}
+
+# cs_eng_note_drv RC: like cs_eng_note_rc, but only for Drive failure codes (3 login, 6 network, 7 retry).
+cs_eng_note_drv() {
+  case $1 in 3 | 6 | 7) cs_eng_note_rc "$1" ;; esac
+  return 0
+}
+
+# cs_eng_online_gate (SPEC §14 step 3): wait for the network with a backoff (5 s doubling to 30 s in the first
+# 5 minutes after boot/resume, up to 300 s later), for at most CS_OFFLINE_BUDGET seconds. Not for localfs.
+cs_eng_online_gate() {
+  [[ ${CS_DRIVE_BACKEND:-gdrive} == gdrive ]] || return 0
+  local url=${CS_PROBE_URL:-https://clients3.google.com/generate_204} budget=${CS_OFFLINE_BUDGET:-1800}
+  local delay=${CS_OFFLINE_DELAY0:-5} cap=300 waited=0 code
+  if [[ $CS_TRIGGER == resume || $CS_TRIGGER == logon ]] || (($(cs_uptime_s) < 300)); then cap=30; fi
+  while :; do
+    code=$(nat curl -s -m 3 -o /dev/null -w '%{http_code}' "$url" 2>/dev/null) || code=000
+    [[ $code == 204 || $code == 200 ]] && return 0
+    ((waited + 1 > budget)) && return 1
+    sleep "$delay"
+    waited=$((waited + ${delay%.*} + 1))
+    delay=$((${delay%.*} * 2))
+    ((delay > cap)) && delay=$cap
+    ((delay < 1)) && delay=1
+  done
+}
+
+# cs_eng_auth_probe: one cheap authenticated call; 3 = login required, 6 = no network.
+cs_eng_auth_probe() {
+  local rc=0
+  drv_server_time >/dev/null || rc=$?
+  case $rc in
+    0) return 0 ;;
+    3) return 3 ;;
+    *) return 6 ;;
+  esac
+}
+
+# cs_run_finish STATE PULL_OK PUSH_OK: write status.json and give back the exit code of the run.
+cs_run_finish() {
+  cs_status_finish "$1" "$2" "$3"
+  cs_log info "run: finished, state $1"
+  return "$(cs_status_exit "$1")"
+}
+
 # cs_run [--dry-run]: one cycle. Prints a one-line summary.
 cs_run() {
   local dry=0
@@ -527,10 +583,23 @@ cs_run() {
     return "$CS_EXIT_BUSY"
   }
   cs_eng_load || return
+  cs_log_rotate
+  CS_RUN_DRV_RC=0 CS_RUN_FAILS=0
   local j
   while IFS= read -r j; do [[ -n $j ]] && cs_journal_abandon "$j"; done < <(cs_journal_pending)
+  local prc=0
+  if ((!dry)); then
+    cs_eng_online_gate || prc=4
+    ((prc)) || cs_eng_auth_probe || prc=$?
+    if ((prc)); then
+      if ((prc == 3)); then cs_say engine.login_required; else cs_say engine.offline; fi
+      cs_run_finish "$([[ $prc == 3 ]] && echo LOGIN_REQUIRED || echo OFFLINE)" 0 0
+      return
+    fi
+  fi
   cs_root_check || {
     cs_say engine.root_missing
+    ((dry)) || cs_run_finish ROOT_MISSING 0 0 >/dev/null || true
     return "$CS_EXIT_ERROR"
   }
   cs_eng_fetch_remotes
@@ -587,7 +656,7 @@ cs_run() {
       case $CS_INIT_RESULT in
         publish) to_publish+=("$sid"$'\t'"$f"$'\t'"$pid"$'\t'"$dir"$'\t'"$CS_INIT_ILEN"$'\t'0) ;;
         install)
-          cs_eng_install "$sid" "$CS_INIT_ENTRY" "$dir" || true
+          cs_eng_install "$sid" "$CS_INIT_ENTRY" "$dir" || cs_eng_note_drv $?
           ;;
         conflict) cs_log info "run: $sid has no common history with the other machines; deferred (forks: #20)" ;;
       esac
@@ -620,7 +689,7 @@ cs_run() {
         continue
       }
       cs_eng_time_left || continue
-      cs_eng_install "$sid" "$(cs_eng_remote_entry "${pick%%$'\t'*}" "$sid")" "$dir" "$ilen" "$base" || true
+      cs_eng_install "$sid" "$(cs_eng_remote_entry "${pick%%$'\t'*}" "$sid")" "$dir" "$ilen" "$base" || cs_eng_note_drv $?
       continue
     fi
     if ((changed)) || [[ -z $base ]]; then
@@ -676,7 +745,7 @@ cs_run() {
     }
     cs_eng_time_left || continue
     # A session that is gone locally is installed whole again (a newer version exists).
-    cs_eng_install "$sid" "$e" "$dir" || true
+    cs_eng_install "$sid" "$e" "$dir" || cs_eng_note_drv $?
   done <<<"$table"
   ((skipped)) && cs_log info "run: $skipped session(s) older than the retention here were not installed (they stay on Drive; claude-sync restore <sid>)"
 
@@ -689,10 +758,25 @@ cs_run() {
       continue
     }
     cs_eng_time_left || break
-    cs_eng_publish "$sid" "$f" "$pid" "$dir" "$ilen" "$rw" || cs_log warn "run: publishing $sid failed; retried next cycle"
+    cs_eng_publish "$sid" "$f" "$pid" "$dir" "$ilen" "$rw" || {
+      cs_eng_note_rc $?
+      cs_log warn "run: publishing $sid failed; retried next cycle"
+    }
   done
-  ((dry)) || cs_eng_publish_manifest
+  ((dry)) || cs_eng_publish_manifest || cs_eng_note_rc $?
   cs_say engine.summary "$CS_RUN_INSTALLED" "$CS_RUN_PUBLISHED"
+  ((dry)) && return 0
+  local state=OK
+  if ((CS_RUN_DRV_RC == 3)); then
+    state=LOGIN_REQUIRED
+  elif ((CS_RUN_DRV_RC == 6)); then
+    state=OFFLINE
+  elif ((CS_RUN_FAILS)); then
+    state=ERROR
+  elif cs_tsv_rows sessions | "$CS_AWK" -F'\t' '$10 == "needs_repair" { f = 1 } END { exit !f }'; then
+    state=NEEDS_REPAIR
+  fi
+  cs_run_finish "$state" "$((CS_RUN_FAILS == 0))" "$((CS_RUN_FAILS == 0))"
 }
 
 # cs_restore SID: install a session from Drive that retention (or the user) removed here; its mtime is

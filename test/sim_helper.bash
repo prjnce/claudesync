@@ -28,7 +28,7 @@ sim_exec() {
   env "${e[@]}" CS_SIM_CODE="$code" bash -c '
     set -uo pipefail
     source "$CS_ROOT/lib/core.sh"
-    for m in platform version manifest store claude transform projects drive root engine; do source "$CS_ROOT/lib/$m.sh"; done
+    for m in platform version manifest store claude transform projects drive root status engine; do source "$CS_ROOT/lib/$m.sh"; done
     cs_bootstrap
     cs_store_init
     eval "$CS_SIM_CODE"' _ "$@"
@@ -89,4 +89,13 @@ sim_find() {
 # sim_canon NAME FILE: FILE canonicalized with machine NAME's rows (to compare content across machines).
 sim_canon() {
   sim_exec "$1" 'cs_transform canon "$(cs_project_rows)" <"$1"' "$2"
+}
+
+# sim_cli NAME ARGS...: claude-sync ARGS as machine NAME.
+sim_cli() {
+  local n=$1
+  shift
+  local -a e
+  mapfile -t e < <(sim_env "$n")
+  env "${e[@]}" bash "$CS_ROOT/bin/claude-sync" "$@"
 }

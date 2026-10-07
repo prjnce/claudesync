@@ -292,14 +292,6 @@ uline() { printf '{"type":"%s","uuid":"u-%s","cwd":"D:\\\\Projects\\\\X","n":%s}
 
 # --- ticket #18 slice 3: retention and restore (SPEC §12.9) -----------------------------------------------
 
-sim_cli() { # NAME ARGS...
-  local n=$1
-  shift
-  local -a e
-  mapfile -t e < <(sim_env "$n")
-  env "${e[@]}" bash "$CS_ROOT/bin/claude-sync" "$@"
-}
-
 @test "L12: a session older than B's retention is not installed, is listed, and restore installs it" {
   now=$(date +%s)
   sim_write A "$ASLUG" "$SID" "$(uline 1)" "$(uline 2)"

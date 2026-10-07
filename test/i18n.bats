@@ -85,10 +85,10 @@ specs() {
 
 @test "errors are localized on stderr but logged in English" {
   mkdir -p "$CLAUDE_SYNC_HOME/logs"
-  CLAUDE_SYNC_LANG=vi run cli status
+  CLAUDE_SYNC_LANG=vi run cli conflicts
   [ "$status" -eq 1 ]
-  [[ $output == *'lệnh "status" chưa được làm'* ]]
-  grep -q 'level=error "status" is not implemented yet' "$CLAUDE_SYNC_HOME/logs/claude-sync.log"
+  [[ $output == *'lệnh "conflicts" chưa được làm'* ]]
+  grep -q 'level=error "conflicts" is not implemented yet' "$CLAUDE_SYNC_HOME/logs/claude-sync.log"
 }
 
 @test "cs_pad aligns by characters, not bytes" {
