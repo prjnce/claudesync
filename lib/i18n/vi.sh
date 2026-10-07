@@ -147,6 +147,11 @@ declare -gA CS_MSG_vi=(
   [engine.busy]='Đang có một lần chạy claude-sync khác; không làm gì thêm.'
   [engine.root_missing]='Folder gốc trên Google Drive không còn hoặc đang ở thùng rác (ROOT_MISSING); chưa sync gì.'
   [engine.summary]='Sync xong: cài %s, công bố %s.'
+  [restore.usage]='Cách dùng: claude-sync restore <session-id>'
+  [restore.not_found]='Session %s không có trên Google Drive.'
+  [restore.exists]='Session %s đã có trên máy này.'
+  [restore.failed]='Không khôi phục được session %s (xem log).'
+  [restore.done]='Đã khôi phục session %s (mtime lùi 1 ngày để Claude không dọn ngay).'
 
   [projects.col_sessions]='SESSION'
   [projects.col_size]='DUNG LƯỢNG'

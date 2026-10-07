@@ -289,3 +289,68 @@ uline() { printf '{"type":"%s","uuid":"u-%s","cwd":"D:\\\\Projects\\\\X","n":%s}
   [[ $(sim_exec B 'cs_tsv_get sessions "$1"' "$SID") == *conflict* ]]
   [ "$(wc -l <"$fb")" -eq 2 ]
 }
+
+# --- ticket #18 slice 3: retention and restore (SPEC §12.9) -----------------------------------------------
+
+sim_cli() { # NAME ARGS...
+  local n=$1
+  shift
+  local -a e
+  mapfile -t e < <(sim_env "$n")
+  env "${e[@]}" bash "$CS_ROOT/bin/claude-sync" "$@"
+}
+
+@test "L12: a session older than B's retention is not installed, is listed, and restore installs it" {
+  now=$(date +%s)
+  sim_write A "$ASLUG" "$SID" "$(uline 1)" "$(uline 2)"
+  touch -d "@$((now - 45 * 86400))" "$SIM/A/claude/projects/$ASLUG/$SID.jsonl"
+  sim_run A >/dev/null
+  run sim_run B
+  [[ $output == *'0 installed'* ]]
+  [ -z "$(sim_find B "$SID")" ]
+  grep -q "^$SID" "$SIM/B/home/.claude-sync/state/retention_skipped"
+  run sim_cli B restore "$SID"
+  echo "$output"
+  [ "$status" -eq 0 ]
+  f=$(sim_find B "$SID")
+  [ "$(wc -l <"$f")" -eq 2 ]
+  m=$(stat -c %Y "$f")
+  ((m > now - 86400 - 120 && m < now - 86400 + 120))
+  run sim_run B
+  [[ $output == *'0 installed, 0 published'* ]]
+  run sim_cli B restore "$SID"
+  [ "$status" -ne 0 ]
+}
+
+@test "a user who deletes a session on B loses nothing on A and B does not download it again (until a newer version)" {
+  sim_write A "$ASLUG" "$SID" "$(uline 1)" "$(uline 2)"
+  sim_run A >/dev/null
+  sim_run B >/dev/null
+  rm -f "$(sim_find B "$SID")"
+  for m in B A B; do
+    run sim_run "$m"
+    [[ $output == *'0 installed, 0 published'* ]] || { echo "$m: $output"; return 1; }
+  done
+  [ -z "$(sim_find B "$SID")" ]
+  [ "$(wc -l <"$SIM/A/claude/projects/$ASLUG/$SID.jsonl")" -eq 2 ]
+  [ "$(sim_exec B 'cs_tsv_field sessions status "$1"' "$SID")" = local_absent_user ]
+  sim_write A "$ASLUG" "$SID" "$(uline 3)"
+  sim_run A >/dev/null
+  run sim_run B
+  [[ $output == *'1 installed'* ]]
+  [ "$(wc -l <"$(sim_find B "$SID")")" -eq 3 ]
+}
+
+@test "a session gone because Claude swept it (older than the threshold) is local_absent_retention" {
+  now=$(date +%s)
+  sim_write A "$ASLUG" "$SID" "$(uline 1)"
+  touch -d "@$((now - 20 * 86400))" "$SIM/A/claude/projects/$ASLUG/$SID.jsonl"
+  sim_run A >/dev/null
+  sim_run B >/dev/null
+  [ -n "$(sim_find B "$SID")" ]
+  printf '{"cleanupPeriodDays":10}\n' >"$SIM/B/claude/settings.json"
+  rm -f "$(sim_find B "$SID")"
+  sim_run B >/dev/null
+  [ "$(sim_exec B 'cs_tsv_field sessions status "$1"' "$SID")" = local_absent_retention ]
+  [ -n "$(sim_find A "$SID")" ]
+}

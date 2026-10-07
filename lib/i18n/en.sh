@@ -147,6 +147,11 @@ declare -gA CS_MSG_en=(
   [engine.busy]='Another claude-sync run is in progress; nothing to do.'
   [engine.root_missing]='The root folder on Google Drive is missing or in the trash (ROOT_MISSING); nothing was synced.'
   [engine.summary]='Sync done: %s installed, %s published.'
+  [restore.usage]='Usage: claude-sync restore <session-id>'
+  [restore.not_found]='Session %s is not on Google Drive.'
+  [restore.exists]='Session %s already exists on this machine.'
+  [restore.failed]='Could not restore session %s (see the log).'
+  [restore.done]='Restored session %s (modified one day ago, so that Claude does not sweep it at once).'
 
   [projects.col_sessions]='SESSIONS'
   [projects.col_size]='SIZE'

@@ -304,6 +304,7 @@ cs_eng_install() {
   fi
   mt=$(cs_jq -r '.mtime // empty' <<<"$entry")
   [[ $mt =~ ^[0-9]+$ ]] || mt=$(date +%s)
+  [[ ${CS_INSTALL_MTIME:-} =~ ^[0-9]+$ ]] && mt=$CS_INSTALL_MTIME # restore
   ((mt > $(date +%s))) && mt=$(date +%s) # clock skew: never in the future
   touch -d "@$mt" -- "$tmp"
   # Compare-and-swap (SPEC §12.7 step 6): the target and the registry must be as when we decided.
@@ -352,6 +353,14 @@ cs_eng_deleted_uuids() {
 
 cs_eng_chat_uuids() {
   { grep -a -E '"type":"(user|assistant|attachment|system)"' -- "$1" || true; } | { grep -a -o '"uuid":"[^"]*"' || true; }
+}
+
+# cs_eng_cutoff PROJECT_ID: mtime below which Claude here would sweep a session (SPEC §12.9); 0 when it never sweeps.
+cs_eng_cutoff() {
+  local root days
+  root=$(cs_tsv_rows projects | I=$1 "$CS_AWK" -F'	' '$1 == ENVIRON["I"] && $6 == 1 { print $2; exit }')
+  days=$(cs_claude_retention_days "$(cs_posix_of_native "$root")")
+  if ((days == 0)); then echo 0; else echo $(($(date +%s) - days * 86400)); fi
 }
 
 # cs_eng_adopt SID ENTRY: record ENTRY as our base version in the manifest, the entry file and known/.
@@ -483,7 +492,7 @@ cs_run() {
   table=$(cs_eng_candidates_table)
   CS_RUN_PUBLISHED=0 CS_RUN_INSTALLED=0
   local -A seen=()
-  local slug sid size mt row f pid dir lsize lmt ilen isha base status cands pick
+  local slug sid size mt row f pid dir lsize lmt ilen isha base status cands pick bentry
   local -a r
   local live
   live=" $(cs_claude_live_sessions | cut -f1 | tr '\n' ' ') "
@@ -569,25 +578,56 @@ cs_run() {
     fi
   done < <(cs_claude_scan)
 
-  # 2. Sessions that exist only on other machines.
-  local mid head proj
-  while IFS=$'\t' read -r mid sid head proj; do
+  # 2. Sessions that exist only on other machines, or that were installed here and are gone.
+  local mid head proj cutoff e emt skipped=0
+  : >"$CS_HOME/state/retention_skipped"
+  while IFS=$'	' read -r mid sid head proj; do
     [[ -n $sid && -z ${seen[$sid]:-} ]] || continue
     seen[$sid]=1
-    cs_tsv_rows projects | cut -f1,6 | grep -qx "$proj"$'\t'1 || continue # not mapped here (#31)
+    cs_tsv_rows projects | cut -f1,6 | grep -qx "$proj"$'	'1 || continue # not mapped here (#31)
+    cutoff=$(cs_eng_cutoff "$proj")
+    dir='' base=''
     if row=$(cs_tsv_get sessions "$sid"); then
-      cs_log info "run: $sid was installed before but is gone locally; not re-downloaded (#18)"
+      cs_tsv_split "$row" r
+      pid=${r[1]} dir=${r[2]} lsize=${r[3]} lmt=${r[4]} ilen=${r[5]} isha=${r[6]} base=${r[7]} status=${r[9]}
+      if [[ $base == - ]]; then
+        base=''
+      else
+        # Installed or published before and gone now (SPEC §12.9): retention or the user; never propagated.
+        case $status in
+          local_absent_*) ;;
+          *)
+            if ((lmt < cutoff)); then status=local_absent_retention; else status=local_absent_user; fi
+            ((dry)) || cs_eng_row_set "$sid" "$pid" "$dir" "$lsize" "$lmt" "$ilen" "$isha" "$base" "$status"
+            cs_log info "run: $sid is gone locally ($status); not propagated"
+            ;;
+        esac
+      fi
+    fi
+    bentry=''
+    [[ -n $base ]] && bentry=$(cat -- "$(cs_eng_entry_file "$sid")" 2>/dev/null || true)
+    pick=$(cs_eng_pick "$sid" "$bentry" "$(printf '%s
+' "$table" | S=$sid "$CS_AWK" -F'	' -v OFS='	' '$2 == ENVIRON["S"] { print $1, $3 }')")
+    [[ -n $pick && $pick != CONFLICT* ]] || continue
+    e=$(cs_eng_remote_entry "${pick%%$'	'*}" "$sid")
+    emt=$(cs_jq -r '.mtime // empty' <<<"$e")
+    [[ $emt =~ ^[0-9]+$ ]] || emt=$(date +%s)
+    if ((emt < cutoff)); then
+      printf '%s	%s
+' "$sid" "$emt" >>"$CS_HOME/state/retention_skipped"
+      skipped=$((skipped + 1))
       continue
     fi
-    pick=$(cs_eng_pick "$sid" "" "$(printf '%s\n' "$table" | S=$sid "$CS_AWK" -F'\t' -v OFS='\t' '$2 == ENVIRON["S"] { print $1, $3 }')")
-    [[ -n $pick && $pick != CONFLICT* ]] || continue
     ((dry)) && {
-      printf 'install %s\n' "$sid"
+      printf 'install %s
+' "$sid"
       continue
     }
     cs_eng_time_left || continue
-    cs_eng_install "$sid" "$(cs_eng_remote_entry "${pick%%$'\t'*}" "$sid")" || true
+    # A session that is gone locally is installed whole again (a newer version exists).
+    cs_eng_install "$sid" "$e" "$dir" || true
   done <<<"$table"
+  ((skipped)) && cs_log info "run: $skipped session(s) older than the retention here were not installed (they stay on Drive; claude-sync restore <sid>)"
 
   # 3. Publish.
   local item rw
@@ -602,4 +642,38 @@ cs_run() {
   done
   ((dry)) || cs_eng_publish_manifest
   cs_say engine.summary "$CS_RUN_INSTALLED" "$CS_RUN_PUBLISHED"
+}
+
+# cs_restore SID: install a session from Drive that retention (or the user) removed here; its mtime is
+# now - 1 day so that it does not fall to the next sweep at once (SPEC §12.9, §20).
+cs_restore() {
+  local sid=${1:-} cands pick dir='' row e r
+  local -a r2
+  [[ $sid =~ ^[0-9a-fA-F-]{36}$ ]] || cs_die_t "$CS_EXIT_USAGE" restore.usage
+  exec 9>>"$CS_HOME/sync.lock"
+  cs_lock_fd 9 0 || {
+    cs_say engine.busy
+    return "$CS_EXIT_BUSY"
+  }
+  cs_eng_load || return
+  cs_root_check || {
+    cs_say engine.root_missing
+    return "$CS_EXIT_ERROR"
+  }
+  cs_eng_fetch_remotes
+  cands=$(cs_eng_candidates_table | S=$sid "$CS_AWK" -F'	' -v OFS='	' '$2 == ENVIRON["S"] { print $1, $3 }')
+  pick=$(cs_eng_cands_by_size "$sid" "$cands" | head -n 1)
+  [[ -n $pick ]] || cs_die_t "$CS_EXIT_ERROR" restore.not_found "$sid"
+  cs_eng_dup_elsewhere "$sid" "" && cs_die_t "$CS_EXIT_ERROR" restore.exists "$sid"
+  IFS=$'	' read -r r pick _ <<<"$pick"
+  e=$(cs_eng_remote_entry "$pick" "$sid")
+  if row=$(cs_tsv_get sessions "$sid"); then
+    cs_tsv_split "$row" r2
+    dir=${r2[2]}
+    [[ $dir == - ]] && dir=''
+  fi
+  CS_RUN_INSTALLED=0 CS_RUN_PUBLISHED=0
+  CS_INSTALL_MTIME=$(($(date +%s) - 86400)) cs_eng_install "$sid" "$e" "$dir" || cs_die_t "$CS_EXIT_ERROR" restore.failed "$sid"
+  ((CS_RUN_INSTALLED)) || cs_die_t "$CS_EXIT_ERROR" restore.failed "$sid"
+  cs_say restore.done "$sid"
 }
