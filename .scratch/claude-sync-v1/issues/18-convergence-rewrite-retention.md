@@ -1,6 +1,6 @@
 # 18 — Hội tụ đầy đủ: khởi tạo, viết lại, relocate, retention
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M4
@@ -18,8 +18,12 @@ Spec: SPEC §6 (thành viên cố định), §8 bước 3 và 5, §12.2, §12.3,
 
 ## Tiêu chí nghiệm thu
 
-- [ ] Mọi tổ hợp của bảng §12.3 có test.
-- [ ] Máy B cài lại claude-sync (mất `~/.claude-sync`, còn `~/.claude`) đã có bản copy cũ của cùng sid → không fork giả, không công bố trùng (**F2**).
-- [ ] Relocate sang project khác và ra ngoài mọi project (**M11**, **P8** phần b).
-- [ ] B không nâng retention, session 45 ngày tuổi → không cài, status báo, `restore` cài được (**L12**).
-- [ ] Người dùng xoá session trên B → A không mất gì, B không tải lại.
+- [x] Mọi tổ hợp của bảng §12.3 có test.
+- [x] Máy B cài lại claude-sync (mất `~/.claude-sync`, còn `~/.claude`) đã có bản copy cũ của cùng sid → không fork giả, không công bố trùng (**F2**).
+- [x] Relocate sang project khác và ra ngoài mọi project (**M11**, **P8** phần b).
+- [x] B không nâng retention, session 45 ngày tuổi → không cài, status báo, `restore` cài được (**L12**).
+- [x] Người dùng xoá session trên B → A không mất gì, B không tải lại.
+
+## Comments
+
+- 2026-10-07: xong theo 4 lát (commit riêng): (1) khởi tạo §12.2 (`cs_eng_init`), (2) viết lại/bảng §12.3/mtime-only/guard ≤3 uuid, (3) retention + `local_absent_*` + `restore`, (4) relocate hai phía (`cs_eng_reloc_target`, `cs_eng_move`). Test: F2, M11, P8b, L12 + các ca bảng quyết định trong `test/engine.bats`. Ca "đổi + có ứng viên" đánh dấu `conflict`, chuyển cho #20. `status.json`/`retention_skipped` hiện là file `state/retention_skipped` (sid, mtime) để #24 đọc.
