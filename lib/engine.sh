@@ -256,8 +256,11 @@ cs_eng_install() {
   fi
   if [[ -n $base ]]; then
     start=$(cs_jq --arg b "$base" '[.segs[].cum] | index([$b])' <<<"$entry")
-    [[ $start =~ ^[0-9]+$ ]] || return 1
-    start=$((start + 1))
+    if [[ $start =~ ^[0-9]+$ ]]; then
+      start=$((start + 1))
+    else
+      start=0 ilen=0 # a rewrite or compaction replaced the chain: install the whole new content
+    fi
   fi
   n=$(cs_jq '.segs | length' <<<"$entry")
   local -a gzs=()
@@ -323,6 +326,81 @@ cs_eng_install() {
 
 # --- deciding ------------------------------------------------------------------------------------------
 
+# cs_eng_adopt SID ENTRY: record ENTRY as our base version in the manifest, the entry file and known/.
+cs_eng_adopt() {
+  cs_write_atomic "$(cs_eng_entry_file "$1")" printf '%s
+' "$2"
+  cs_known_add "$1" "$(cs_jq -r .head <<<"$2")"
+  cs_eng_my_manifest_save "$(cs_manifest_put_session "$(cs_eng_my_manifest)" "$1" "$2")"
+}
+
+# cs_eng_cands_by_size SID CANDS: "mid head" lines as "segments<TAB>mid<TAB>head", most segments first.
+cs_eng_cands_by_size() {
+  local mid head
+  while IFS=$'	' read -r mid head; do
+    [[ -n $head ]] || continue
+    printf '%s	%s	%s
+' "$(cs_jq '.segs | length' <<<"$(cs_eng_remote_entry "$mid" "$1")")" "$mid" "$head"
+  done <<<"$2" | sort -t$'	' -k1,1nr -s
+}
+
+# cs_eng_init SID FILE PROJECT DIR CANDS: SPEC §12.2, a local file without a base. Compares the canonical
+# bytes of the file with the full content of each candidate (largest first) and sets CS_INIT_RESULT:
+#   equal    same content: base adopted, nothing to do
+#   publish  a candidate is a prefix of the file: base adopted, the tail is a local change (CS_INIT_ILEN)
+#   install  the file is a prefix of (or an older version of) a candidate: install it over the file
+#   conflict no relation: diverged (forks: #20)
+cs_eng_init() {
+  local sid=$1 f=$2 pid=$3 dir=$4 cands=$5 L canon cf csz xsz mid head e n i lines v1 sha
+  local -a gzs=() order=()
+  L=$(cs_complete_len "$f")
+  canon="$CS_HOME/staging/init.$sid.canon"
+  cf="$CS_HOME/staging/init.$sid.cand"
+  head -c "$L" -- "$f" | cs_transform canon "$CS_ROWS" >"$canon"
+  csz=$(stat -c %s -- "$canon")
+  sha=$(cs_sha256_hex "$canon")
+  v1=$(cs_cum_next "$(cs_cum0 "$sid")" "$sha")
+  CS_INIT_RESULT=conflict CS_INIT_ILEN=0
+  while IFS=$'	' read -r n mid head; do
+    [[ -n $head ]] || continue
+    e=$(cs_eng_remote_entry "$mid" "$sid")
+    gzs=()
+    n=$(cs_jq '.segs | length' <<<"$e")
+    for ((i = 0; i < n; i++)); do
+      gzs+=("$(cs_eng_seg_fetch "$(cs_jq -c ".segs[$i]" <<<"$e")")") || break
+    done
+    ((${#gzs[@]} == n)) || continue
+    if ((n)); then gzip -dc -- "${gzs[@]}" >"$cf"; else : >"$cf"; fi
+    xsz=$(stat -c %s -- "$cf")
+    if ((xsz == csz)) && cmp -s -- "$canon" "$cf"; then
+      CS_INIT_RESULT=equal
+      ilen_local=$L
+    elif ((xsz < csz)) && head -c "$xsz" -- "$canon" | cmp -s - "$cf"; then
+      lines=$(cs_jq -r .lines <<<"$e")
+      ilen_local=$(head -n "$lines" -- "$f" | wc -c)
+      CS_INIT_RESULT=publish CS_INIT_ILEN=$ilen_local
+    elif ((xsz > csz)) && head -c "$csz" -- "$cf" | cmp -s - "$canon"; then
+      CS_INIT_RESULT=install
+    elif cs_entry_is_ancestor "$e" "$v1"; then
+      CS_INIT_RESULT=install
+    else
+      continue
+    fi
+    if [[ $CS_INIT_RESULT != install ]]; then
+      cs_eng_adopt "$sid" "$e"
+      read -r xsz mid < <(stat -c '%s %Y' -- "$f")
+      [[ $CS_INIT_RESULT == equal ]] || xsz=0 mid=0 # a local tail: look changed so that it is published
+      cs_eng_row_set "$sid" "$pid" "$dir" "$xsz" "$mid" "$ilen_local" "$(cs_sha256_range "$f" 0 "$ilen_local")" "$head" synced
+    else
+      CS_INIT_ENTRY=$e
+    fi
+    break
+  done <<<"$(cs_eng_cands_by_size "$sid" "$cands")"
+  rm -f -- "$canon" "$cf"
+  [[ $CS_INIT_RESULT == conflict ]] && cs_eng_row_set "$sid" "$pid" "$dir" 0 0 0 - - conflict
+  return 0
+}
+
 # cs_eng_pick SID BASE_ENTRY CANDS: among candidate "mid head" lines, the one to install — not already
 # known, not an ancestor of our base, and (with a base) a descendant of it. Prints "mid<TAB>head".
 cs_eng_pick() {
@@ -383,6 +461,7 @@ cs_run() {
       cs_tsv_split "$row" r
       pid=${r[1]} dir=${r[2]} lsize=${r[3]} lmt=${r[4]} ilen=${r[5]} isha=${r[6]} base=${r[7]} status=${r[9]}
       [[ $base == - ]] && base=''
+      [[ $status == needs_repair ]] && continue
       if [[ $pid == - ]]; then
         # Not in a mapped project when first seen: the user may have mapped it since.
         pid=$(cs_project_of_cwd "$(cs_launch_cwd "$f" 2>/dev/null || echo)" 2>/dev/null) || pid=-
@@ -398,6 +477,23 @@ cs_run() {
     cands=$(printf '%s\n' "$table" | S=$sid "$CS_AWK" -F'\t' -v OFS='\t' '$2 == ENVIRON["S"] { print $1, $3 }')
     local changed=0
     [[ $size != "$lsize" || $mt != "$lmt" ]] && changed=1
+    if [[ -z $base && -n $cands ]]; then
+      ((dry)) && {
+        printf 'init %s
+' "$sid"
+        continue
+      }
+      cs_eng_time_left || continue
+      cs_eng_init "$sid" "$f" "$pid" "$dir" "$cands"
+      case $CS_INIT_RESULT in
+        publish) to_publish+=("$sid"$'	'"$f"$'	'"$pid"$'	'"$dir"$'	'"$CS_INIT_ILEN") ;;
+        install)
+          cs_eng_install "$sid" "$CS_INIT_ENTRY" "$dir" || true
+          ;;
+        conflict) cs_log info "run: $sid has no common history with the other machines; deferred (forks: #20)" ;;
+      esac
+      continue
+    fi
     if ((changed)) && [[ -n $base ]] && [[ $(cs_sha256_range "$f" 0 "$ilen") != "$isha" ]]; then
       cs_log info "run: $sid was rewritten locally; deferred (rewrite handling: #18)"
       continue

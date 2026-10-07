@@ -167,3 +167,60 @@ aline() { printf '{"type":"user","cwd":"D:\\\\Projects\\\\X%s","n":%s,"t":"xin c
   [[ $output == *"publish $SID"* ]]
   [ -z "$(ls "$SIM/drive/objects" | head -n 1)" ] || [ "$(grep -l csSid "$SIM"/drive/objects/*/meta.json 2>/dev/null | wc -l)" -eq 0 ]
 }
+
+# --- ticket #18 slice 1: initialisation without a base (SPEC §12.2) ---------------------------------------
+
+bline() { printf '{"type":"user","cwd":"%s%s","n":%s,"t":"xin chào %s"}' "$BROOT" "${2:-}" "$1" "$1"; }
+
+@test "F2: B has no state but an older copy of the same session -> it is brought up to date, not forked or republished" {
+  sim_write A "$ASLUG" "$SID" "$(aline 1)" "$(aline 2)" "$(aline 3)"
+  sim_run A >/dev/null
+  sim_write B "$BSLUG" "$SID" "$(bline 1)" "$(bline 2)"
+  run sim_run B
+  echo "$output"
+  [[ $output == *'1 installed, 0 published'* ]]
+  f=$(sim_find B "$SID")
+  [ "$(sim_find B "$SID" | wc -l)" -eq 1 ]
+  [ "$(wc -l <"$f")" -eq 3 ]
+  [ "$(sim_canon B "$f")" = "$(sim_canon A "$SIM/A/claude/projects/$ASLUG/$SID.jsonl")" ]
+  for m in A B A B; do
+    run sim_run "$m"
+    [[ $output == *'0 installed, 0 published'* ]] || { echo "$m: $output"; return 1; }
+  done
+}
+
+@test "initialisation: an identical copy adopts the base silently, later appends flow as appends" {
+  sim_write A "$ASLUG" "$SID" "$(aline 1)" "$(aline 2)"
+  sim_run A >/dev/null
+  sim_write B "$BSLUG" "$SID" "$(bline 1)" "$(bline 2)"
+  run sim_run B
+  [[ $output == *'0 installed, 0 published'* ]]
+  sim_write A "$ASLUG" "$SID" "$(aline 3)"
+  sim_run A >/dev/null
+  run sim_run B
+  [[ $output == *'1 installed, 0 published'* ]]
+  [ "$(wc -l <"$(sim_find B "$SID")")" -eq 3 ]
+}
+
+@test "initialisation: a local copy longer than the remote one publishes only its tail" {
+  sim_write A "$ASLUG" "$SID" "$(aline 1)" "$(aline 2)"
+  sim_run A >/dev/null
+  sim_write B "$BSLUG" "$SID" "$(bline 1)" "$(bline 2)" "$(bline 3)"
+  run sim_run B
+  [[ $output == *'0 installed, 1 published'* ]]
+  run sim_run A
+  [[ $output == *'1 installed, 0 published'* ]]
+  [ "$(wc -l <"$SIM/A/claude/projects/$ASLUG/$SID.jsonl")" -eq 3 ]
+  [ "$(sim_canon A "$SIM/A/claude/projects/$ASLUG/$SID.jsonl")" = "$(sim_canon B "$(sim_find B "$SID")")" ]
+}
+
+@test "initialisation: unrelated content under the same id is neither installed nor published" {
+  sim_write A "$ASLUG" "$SID" "$(aline 1)" "$(aline 2)"
+  sim_run A >/dev/null
+  sim_write B "$BSLUG" "$SID" "$(bline 7)" "$(bline 8)"
+  before=$(cat "$(sim_find B "$SID")")
+  run sim_run B
+  [[ $output == *'0 installed, 0 published'* ]]
+  [ "$(cat "$(sim_find B "$SID")")" = "$before" ]
+  [[ $(sim_exec B 'cs_tsv_get sessions "$1"' "$SID") == *conflict* ]]
+}
