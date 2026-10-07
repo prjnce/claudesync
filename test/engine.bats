@@ -224,3 +224,68 @@ bline() { printf '{"type":"user","cwd":"%s%s","n":%s,"t":"xin chào %s"}' "$BROO
   [ "$(cat "$(sim_find B "$SID")")" = "$before" ]
   [[ $(sim_exec B 'cs_tsv_get sessions "$1"' "$SID") == *conflict* ]]
 }
+
+# --- ticket #18 slice 2: rewrite and the decision table (SPEC §12.3, §12.6) -------------------------------
+
+uline() { printf '{"type":"%s","uuid":"u-%s","cwd":"D:\\\\Projects\\\\X","n":%s}' "${2:-user}" "$1" "$1"; }
+
+@test "a local rewrite publishes a new chain; the other machine replaces its copy; then everything is quiet" {
+  fa="$SIM/A/claude/projects/$ASLUG/$SID.jsonl"
+  sim_write A "$ASLUG" "$SID" "$(uline 1)" "$(uline 2)" "$(uline 3)"
+  sim_run A >/dev/null
+  sim_run B >/dev/null
+  printf '%s\n' "$(uline 1)" "$(uline 3)" "$(uline 4)" >"$fa"
+  run sim_run A
+  echo "$output"
+  [[ $output == *'0 installed, 1 published'* ]]
+  run sim_run B
+  [[ $output == *'1 installed, 0 published'* ]]
+  fb=$(sim_find B "$SID")
+  [ "$(wc -l <"$fb")" -eq 3 ]
+  ! grep -q '"n":2' "$fb"
+  [ "$(sim_canon B "$fb")" = "$(sim_canon A "$fa")" ]
+  for m in A B A B; do
+    run sim_run "$m"
+    [[ $output == *'0 installed, 0 published'* ]] || { echo "$m: $output"; return 1; }
+  done
+}
+
+@test "only the mtime changed: the DB follows, nothing is published (F9)" {
+  fa="$SIM/A/claude/projects/$ASLUG/$SID.jsonl"
+  sim_write A "$ASLUG" "$SID" "$(uline 1)" "$(uline 2)"
+  sim_run A >/dev/null
+  n=$(find "$SIM/drive" -type f | wc -l)
+  touch -d @1790000123 "$fa"
+  run sim_run A
+  [[ $output == *'0 installed, 0 published'* ]]
+  [ "$(find "$SIM/drive" -type f | wc -l)" -eq "$n" ]
+  [ "$(sim_exec A 'cs_tsv_field sessions local_mtime "$1"' "$SID")" = 1790000123 ]
+}
+
+@test "a rewrite that drops many chat lines is not accepted by the receiver (SPEC 12.4)" {
+  fa="$SIM/A/claude/projects/$ASLUG/$SID.jsonl"
+  sim_write A "$ASLUG" "$SID" "$(uline 1)" "$(uline 2)" "$(uline 3)" "$(uline 4)" "$(uline 5)" "$(uline 6)"
+  sim_run A >/dev/null
+  sim_run B >/dev/null
+  fb=$(sim_find B "$SID")
+  before=$(cat "$fb")
+  printf '%s\n' "$(uline 1)" >"$fa"
+  sim_run A >/dev/null
+  run sim_run B
+  [[ $output == *'0 installed'* ]]
+  [ "$(cat "$fb")" = "$before" ]
+}
+
+@test "both machines changed the session: nothing is overwritten and the session is marked conflict (forks: #20)" {
+  sim_write A "$ASLUG" "$SID" "$(uline 1)"
+  sim_run A >/dev/null
+  sim_run B >/dev/null
+  sim_write A "$ASLUG" "$SID" "$(uline 2)"
+  fb=$(sim_find B "$SID")
+  printf '{"type":"user","uuid":"u-b","cwd":"%s"}\n' "$BROOT" >>"$fb"
+  sim_run A >/dev/null
+  run sim_run B
+  [[ $output == *'0 installed, 0 published'* ]]
+  [[ $(sim_exec B 'cs_tsv_get sessions "$1"' "$SID") == *conflict* ]]
+  [ "$(wc -l <"$fb")" -eq 2 ]
+}

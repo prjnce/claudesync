@@ -204,10 +204,12 @@ cs_eng_seg_fetch() {
 
 # --- publish --------------------------------------------------------------------------------------------
 
-# cs_eng_publish SID FILE PROJECT DIR PREV_LEN: append our new complete lines as one segment.
+# cs_eng_publish SID FILE PROJECT DIR PREV_LEN [RESTART]: append our new complete lines as one segment, or
+# (RESTART=1, a rewrite) publish the whole content as a new chain that records the old versions in from[].
 cs_eng_publish() {
-  local sid=$1 f=$2 pid=$3 dir=$4 prev=${5:-0} L seg sha len lines id jr entry seq launch man size mt
+  local sid=$1 f=$2 pid=$3 dir=$4 prev=${5:-0} restart=${6:-0} L seg sha len lines id jr entry seq launch man size mt
   L=$(cs_complete_len "$f")
+  ((restart)) && prev=0
   ((L > prev)) || return 0
   seg="$CS_HOME/staging/seg.$sid.gz"
   tail -c +$((prev + 1)) -- "$f" | head -c $((L - prev)) | cs_transform canon "$CS_ROWS" | gzip -n -c >"$seg"
@@ -223,7 +225,11 @@ cs_eng_publish() {
     rm -f -- "$seg"
     return 1
   }
-  entry=$(cs_entry_append "$sid" "$entry" "$CS_ME" "$id" "$len" "$lines" "$sha")
+  if ((restart)); then
+    entry=$(cs_entry_restart "$sid" "$entry" "$CS_ME" "$id" "$len" "$lines" "$sha")
+  else
+    entry=$(cs_entry_append "$sid" "$entry" "$CS_ME" "$id" "$len" "$lines" "$sha")
+  fi
   launch=$(cs_eng_canon_path "$(cs_launch_cwd "$f")")
   read -r size mt < <(stat -c '%s %Y' -- "$f")
   entry=$(cs_jq -c --arg p "$pid" --arg l "$launch" --argjson mt "$mt" '. + {project: $p, launch: $l, mtime: $mt}' <<<"$entry")
@@ -234,7 +240,7 @@ cs_eng_publish() {
   cs_known_add "$sid" "$(cs_jq -r .head <<<"$entry")"
   cs_journal_end "$jr"
   rm -f -- "$seg"
-  cs_log info "run: published $sid (+$lines lines, segment $seq)"
+  cs_log info "run: published $sid (+$lines lines, segment $seq$( ((restart)) && echo ", rewrite"))"
   CS_RUN_PUBLISHED=$((CS_RUN_PUBLISHED + 1))
 }
 
@@ -288,6 +294,14 @@ cs_eng_install() {
     cs_journal_end "$jr"
     return 1
   fi
+  if ((start == 0)) && [[ -f $f ]] && (($(cs_eng_deleted_uuids "$f" "$tmp") > CS_REWRITE_MAX_DELETED)); then
+    # SPEC §12.4: a replacement that drops more than a few chat lines is a divergence, not a rewrite.
+    cs_log warn "run: $sid: the new version drops too many chat lines; kept as it is (forks: #20)"
+    rm -f -- "$tmp" "$shaf"
+    cs_journal_end "$jr"
+    cs_eng_row_set "$sid" "$pid" "$dir" 0 0 "$ilen" - "${base:--}" conflict
+    return 0
+  fi
   mt=$(cs_jq -r '.mtime // empty' <<<"$entry")
   [[ $mt =~ ^[0-9]+$ ]] || mt=$(date +%s)
   ((mt > $(date +%s))) && mt=$(date +%s) # clock skew: never in the future
@@ -326,10 +340,23 @@ cs_eng_install() {
 
 # --- deciding ------------------------------------------------------------------------------------------
 
+CS_REWRITE_MAX_DELETED=3 # SPEC §12.4: a receiver accepts a rewrite that deletes at most this many chat lines
+
+# cs_eng_deleted_uuids OLD NEW: how many chat lines (by uuid) of OLD are missing from NEW.
+cs_eng_deleted_uuids() {
+  cs_eng_chat_uuids "$1" | sort -u >"$CS_HOME/staging/uu.old"
+  cs_eng_chat_uuids "$2" | sort -u >"$CS_HOME/staging/uu.new"
+  comm -23 "$CS_HOME/staging/uu.old" "$CS_HOME/staging/uu.new" | wc -l | tr -d ' '
+  rm -f -- "$CS_HOME/staging/uu.old" "$CS_HOME/staging/uu.new"
+}
+
+cs_eng_chat_uuids() {
+  { grep -a -E '"type":"(user|assistant|attachment|system)"' -- "$1" || true; } | { grep -a -o '"uuid":"[^"]*"' || true; }
+}
+
 # cs_eng_adopt SID ENTRY: record ENTRY as our base version in the manifest, the entry file and known/.
 cs_eng_adopt() {
-  cs_write_atomic "$(cs_eng_entry_file "$1")" printf '%s
-' "$2"
+  cs_write_atomic "$(cs_eng_entry_file "$1")" printf '%s\n' "$2"
   cs_known_add "$1" "$(cs_jq -r .head <<<"$2")"
   cs_eng_my_manifest_save "$(cs_manifest_put_session "$(cs_eng_my_manifest)" "$1" "$2")"
 }
@@ -337,11 +364,10 @@ cs_eng_adopt() {
 # cs_eng_cands_by_size SID CANDS: "mid head" lines as "segments<TAB>mid<TAB>head", most segments first.
 cs_eng_cands_by_size() {
   local mid head
-  while IFS=$'	' read -r mid head; do
+  while IFS=$'\t' read -r mid head; do
     [[ -n $head ]] || continue
-    printf '%s	%s	%s
-' "$(cs_jq '.segs | length' <<<"$(cs_eng_remote_entry "$mid" "$1")")" "$mid" "$head"
-  done <<<"$2" | sort -t$'	' -k1,1nr -s
+    printf '%s\t%s\t%s\n' "$(cs_jq '.segs | length' <<<"$(cs_eng_remote_entry "$mid" "$1")")" "$mid" "$head"
+  done <<<"$2" | sort -t$'\t' -k1,1nr -s
 }
 
 # cs_eng_init SID FILE PROJECT DIR CANDS: SPEC §12.2, a local file without a base. Compares the canonical
@@ -361,7 +387,7 @@ cs_eng_init() {
   sha=$(cs_sha256_hex "$canon")
   v1=$(cs_cum_next "$(cs_cum0 "$sid")" "$sha")
   CS_INIT_RESULT=conflict CS_INIT_ILEN=0
-  while IFS=$'	' read -r n mid head; do
+  while IFS=$'\t' read -r n mid head; do
     [[ -n $head ]] || continue
     e=$(cs_eng_remote_entry "$mid" "$sid")
     gzs=()
@@ -401,10 +427,14 @@ cs_eng_init() {
   return 0
 }
 
-# cs_eng_pick SID BASE_ENTRY CANDS: among candidate "mid head" lines, the one to install — not already
-# known, not an ancestor of our base, and (with a base) a descendant of it. Prints "mid<TAB>head".
+# cs_eng_pick SID BASE_ENTRY CANDS: among candidate "mid head" lines, the one to install (SPEC §12.3): not
+# already known, not an ancestor of our base, and (with a base) confirmed by it (a descendant of the base,
+# directly or through from[]). Candidates unrelated to the base are ignored while a confirmed one exists.
+# The pick is the confirmed candidate of which every other confirmed one is an ancestor. Prints
+# "mid<TAB>head", nothing, or "CONFLICT<TAB>mid" when the candidates have diverged.
 cs_eng_pick() {
-  local sid=$1 bentry=$2 cands=$3 mid head e best='' bestn=-1 n base=''
+  local sid=$1 bentry=$2 cands=$3 mid head e base='' stray='' x y
+  local -a cm=() ch=() ce=()
   [[ -n $bentry ]] && base=$(cs_jq -r .head <<<"$bentry")
   while IFS=$'\t' read -r mid head; do
     [[ -n $head ]] || continue
@@ -412,17 +442,24 @@ cs_eng_pick() {
     [[ -n $bentry ]] && cs_entry_is_ancestor "$bentry" "$head" && continue
     e=$(cs_eng_remote_entry "$mid" "$sid")
     if [[ -n $base ]] && ! cs_entry_is_ancestor "$e" "$base"; then
-      printf 'CONFLICT\t%s\n' "$mid"
-      return 0
+      stray=$mid
+      continue
     fi
-    n=$(cs_jq '.segs | length' <<<"$e")
-    ((n > bestn)) && {
-      best="$mid"$'\t'"$head"
-      bestn=$n
-    }
+    cm+=("$mid") ch+=("$head") ce+=("$e")
   done <<<"$cands"
-  [[ -n $best ]] && printf '%s\n' "$best"
-  return 0
+  if ((${#cm[@]} == 0)); then
+    [[ -n $stray ]] && printf 'CONFLICT\t%s\n' "$stray"
+    return 0
+  fi
+  for x in "${!cm[@]}"; do
+    for y in "${!cm[@]}"; do
+      [[ $x == "$y" ]] && continue
+      cs_entry_is_ancestor "${ce[x]}" "${ch[y]}" || continue 2
+    done
+    printf '%s\t%s\n' "${cm[x]}" "${ch[x]}"
+    return 0
+  done
+  printf 'CONFLICT\t%s\n' "${cm[0]}"
 }
 
 # cs_run [--dry-run]: one cycle. Prints a one-line summary.
@@ -479,14 +516,13 @@ cs_run() {
     [[ $size != "$lsize" || $mt != "$lmt" ]] && changed=1
     if [[ -z $base && -n $cands ]]; then
       ((dry)) && {
-        printf 'init %s
-' "$sid"
+        printf 'init %s\n' "$sid"
         continue
       }
       cs_eng_time_left || continue
       cs_eng_init "$sid" "$f" "$pid" "$dir" "$cands"
       case $CS_INIT_RESULT in
-        publish) to_publish+=("$sid"$'	'"$f"$'	'"$pid"$'	'"$dir"$'	'"$CS_INIT_ILEN") ;;
+        publish) to_publish+=("$sid"$'\t'"$f"$'\t'"$pid"$'\t'"$dir"$'\t'"$CS_INIT_ILEN"$'\t'0) ;;
         install)
           cs_eng_install "$sid" "$CS_INIT_ENTRY" "$dir" || true
           ;;
@@ -494,26 +530,24 @@ cs_run() {
       esac
       continue
     fi
-    if ((changed)) && [[ -n $base ]] && [[ $(cs_sha256_range "$f" 0 "$ilen") != "$isha" ]]; then
-      cs_log info "run: $sid was rewritten locally; deferred (rewrite handling: #18)"
-      continue
+    local rewrite=0 bentry=''
+    if ((changed)) && [[ -n $base ]]; then
+      if [[ $(cs_sha256_range "$f" 0 "$ilen") != "$isha" ]]; then
+        rewrite=1
+      elif (($(cs_complete_len "$f") == ilen)); then
+        # Only the mtime changed (or a line is still being written): remember it, publish nothing (SPEC §12.6).
+        ((dry)) || cs_eng_row_set "$sid" "$pid" "$dir" "$size" "$mt" "$ilen" "$isha" "$base" "$status"
+        changed=0 lsize=$size lmt=$mt
+      fi
     fi
-    local bentry=''
     [[ -n $base ]] && bentry=$(cat -- "$(cs_eng_entry_file "$sid")" 2>/dev/null || true)
     pick=$(cs_eng_pick "$sid" "$bentry" "$cands")
-    if [[ $pick == CONFLICT* ]]; then
-      cs_log info "run: $sid diverged from ${pick#*$'\t'}; deferred (forks: #20)"
+    if [[ $pick == CONFLICT* ]] || { [[ -n $pick ]] && ((changed)); }; then
+      cs_log info "run: $sid diverged from ${pick#*$'\t'} (changed here: $changed); deferred (forks: #20)"
+      ((dry)) || cs_eng_row_set "$sid" "$pid" "$dir" "$lsize" "$lmt" "$ilen" "$isha" "${base:--}" conflict
       continue
     fi
     if [[ -n $pick ]]; then
-      if [[ -z $base ]]; then
-        cs_log info "run: $sid exists here and remotely without a known base; deferred (initialisation: #18)"
-        continue
-      fi
-      if ((changed)); then
-        cs_log info "run: $sid changed here and on ${pick%%$'\t'*}; deferred (forks: #20)"
-        continue
-      fi
       if [[ $live == *" $sid "* ]]; then
         cs_log info "run: $sid is open here; install deferred (#19)"
         continue
@@ -527,7 +561,11 @@ cs_run() {
       continue
     fi
     if ((changed)) || [[ -z $base ]]; then
-      to_publish+=("$sid"$'\t'"$f"$'\t'"$pid"$'\t'"$dir"$'\t'"${ilen:-0}")
+      if ((rewrite)) && [[ $live == *" $sid "* ]]; then
+        cs_log info "run: $sid was rewritten while open; publishing deferred (#19)"
+        continue
+      fi
+      to_publish+=("$sid"$'\t'"$f"$'\t'"$pid"$'\t'"$dir"$'\t'"${ilen:-0}"$'\t'"$rewrite")
     fi
   done < <(cs_claude_scan)
 
@@ -552,15 +590,15 @@ cs_run() {
   done <<<"$table"
 
   # 3. Publish.
-  local item
+  local item rw
   for item in "${to_publish[@]}"; do
-    IFS=$'\t' read -r sid f pid dir ilen <<<"$item"
+    IFS=$'\t' read -r sid f pid dir ilen rw <<<"$item"
     ((dry)) && {
       printf 'publish %s\n' "$sid"
       continue
     }
     cs_eng_time_left || break
-    cs_eng_publish "$sid" "$f" "$pid" "$dir" "$ilen" || cs_log warn "run: publishing $sid failed; retried next cycle"
+    cs_eng_publish "$sid" "$f" "$pid" "$dir" "$ilen" "$rw" || cs_log warn "run: publishing $sid failed; retried next cycle"
   done
   ((dry)) || cs_eng_publish_manifest
   cs_say engine.summary "$CS_RUN_INSTALLED" "$CS_RUN_PUBLISHED"
