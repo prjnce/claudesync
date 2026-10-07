@@ -1,6 +1,6 @@
 # 24 — status.json, status, log, exit code
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M4
@@ -17,6 +17,10 @@ Spec: SPEC §14 bước 3–5, §20 (`status`, `logs`, exit code), §21
 
 ## Tiêu chí nghiệm thu
 
-- [ ] Mỗi trạng thái của `state` có test sinh ra nó và exit code tương ứng.
-- [ ] Test: log không chứa chuỗi token giả và nội dung transcript giả đã chèn vào fixture.
-- [ ] Mất mạng giữa chu kỳ, crash, token thu hồi → không hỏng dữ liệu local/remote, `status` báo đúng (**A7** phần giả lập).
+- [x] Mỗi trạng thái của `state` có test sinh ra nó và exit code tương ứng.
+- [x] Test: log không chứa chuỗi token giả và nội dung transcript giả đã chèn vào fixture.
+- [x] Mất mạng giữa chu kỳ, crash, token thu hồi → không hỏng dữ liệu local/remote, `status` báo đúng (**A7** phần giả lập).
+
+## Comments
+
+- 2026-10-07: xong. `lib/status.sh` (API `cs_status_patch` + setter cho behind/live_elsewhere/conflicts/waiting_map), exit code theo state (OK0 ERROR1 LOGIN3 OFFLINE4 REPAIR6, ROOT_MISSING=1), cổng offline `cs_eng_online_gate` (chỉ backend gdrive; test bằng `CS_PROBE_URL`/`CS_OFFLINE_BUDGET`), xoay log 5 MB × 5, `claude-sync status [--json]`, `logs [-f]`. Test: `test/status.bats` (11 ca). Chưa làm: "lần chạy kế tiếp" trong `status` (cần #25/#26 scheduler).

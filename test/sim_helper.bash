@@ -15,7 +15,7 @@ sim_init() {
 sim_env() {
   local n=$1
   printf '%s\n' "CLAUDE_SYNC_HOME=$SIM/$n/home/.claude-sync" "CS_CLAUDE_DIR=$SIM/$n/claude" \
-    "CS_DRIVE_BACKEND=localfs" "CS_LFS_ROOT=$SIM/drive" "CS_SEP=$(cat "$SIM/$n/sep")" "CLAUDE_SYNC_LANG=en" \
+    "CS_DRIVE_BACKEND=localfs" "CS_LFS_ROOT=$SIM/drive" "CS_SEP=$(cat "$SIM/$n/sep")" "CLAUDE_SYNC_LANG=en" "CS_STABLE_WAIT=0.2" \
     "CS_LFS_USER=Sim <sim@test>"
 }
 
@@ -98,4 +98,27 @@ sim_cli() {
   local -a e
   mapfile -t e < <(sim_env "$n")
   env "${e[@]}" bash "$CS_ROOT/bin/claude-sync" "$@"
+}
+
+native_pid() { if cs_is_windows; then cat "/proc/$1/winpid"; else printf '%s\n' "$1"; fi; }
+
+# sim_open NAME SID: Claude "opens" session SID on machine NAME (a live process and its registry record).
+sim_open() {
+  local pid
+  sleep 600 3>&- &
+  SIM_SLEEP_PIDS+=("$!")
+  pid=$(native_pid "$!")
+  mkdir -p "$SIM/$1/claude/sessions"
+  printf '{"pid":%s,"sessionId":"%s","status":"busy","cwd":"/x"}' "$pid" "$2" >"$SIM/$1/claude/sessions/$pid.json"
+  printf '%s
+' "$pid" >"$SIM/$1/open.$2"
+}
+
+# sim_close NAME SID: the session is closed (process gone, record removed).
+sim_close() {
+  local pid
+  pid=$(cat "$SIM/$1/open.$2")
+  rm -f "$SIM/$1/claude/sessions/$pid.json" "$SIM/$1/open.$2"
+  kill "${SIM_SLEEP_PIDS[@]}" 2>/dev/null || true
+  SIM_SLEEP_PIDS=()
 }

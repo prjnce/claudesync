@@ -379,6 +379,12 @@ cs_eng_install() {
   rm -f -- "$shaf"
   cs_write_atomic "$(cs_eng_entry_file "$sid")" printf '%s\n' "$entry"
   cs_known_add "$sid" "$head"
+  cs_status_behind_clear "$sid"
+  if cs_claude_live_sessions | cut -f1 | grep -qx "$sid"; then
+    # Opened right after the swap (SPEC §12.7 step 7): the open session has the old content in memory.
+    cs_status_behind_set "$sid" "?" 0 "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    cs_log warn "run: $sid was opened while it was being installed; marked behind"
+  fi
   # Adopt the version in our manifest too, so others never see our older one as a candidate (C1).
   cs_eng_my_manifest_save "$(cs_manifest_put_session "$(cs_eng_my_manifest)" "$sid" "$entry")"
   cs_journal_end "$jr"
@@ -516,6 +522,94 @@ cs_eng_pick() {
     return 0
   done
   printf 'CONFLICT\t%s\n' "${cm[0]}"
+}
+
+# --- open sessions and live.json (SPEC §9.3, §12.4) ------------------------------------------------------
+
+# cs_eng_mark_behind SID MID BENTRY PID DIR LSIZE LMT ILEN ISHA BASE DRY: the session is open here and a newer
+# version exists on machine MID: install nothing, remember it in the DB and status.json for the hook.
+cs_eng_mark_behind() {
+  local sid=$1 mid=$2 bentry=$3 e name lines old
+  e=$(cs_eng_remote_entry "$mid" "$sid")
+  name=$(cs_jq -r '.name // empty' "$CS_HOME/state/remote/$mid.json")
+  lines=$(cs_jq -r .lines <<<"$e")
+  old=0
+  [[ -n $bentry ]] && old=$(cs_jq -r .lines <<<"$bentry")
+  cs_log info "run: $sid is open here; install deferred (behind $((lines - old)) lines)"
+  ((${11})) && return 0
+  cs_eng_row_set "$sid" "$4" "$5" "$6" "$7" "$8" "$9" "${10:--}" behind
+  cs_status_behind_set "$sid" "${name:-$mid}" "$((lines - old))" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+
+# cs_eng_live_due SID: rc 0 when an open session may be published now (at most once per throttle_live_min).
+cs_eng_live_due() {
+  local last=0 min
+  min=$(cs_config_get throttle_live_min 15)
+  [[ $min =~ ^[0-9]+$ ]] || min=15
+  last=$(cat -- "$CS_HOME/state/live_pub.$1" 2>/dev/null) || last=0
+  [[ $last =~ ^[0-9]+$ ]] || last=0
+  (($(date +%s) - last >= min * 60))
+}
+
+# cs_eng_stable FILE: rc 0 if size and hash are the same in two reads CS_STABLE_WAIT (2 s) apart: Claude
+# rewrites a transcript by truncating it, and a shortened snapshot must never be taken (SPEC §12.4).
+cs_eng_stable() {
+  local a b
+  a="$(stat -c %s -- "$1" 2>/dev/null) $(cs_sha256_hex "$1" 2>/dev/null)"
+  sleep "${CS_STABLE_WAIT:-2}"
+  b="$(stat -c %s -- "$1" 2>/dev/null) $(cs_sha256_hex "$1" 2>/dev/null)"
+  [[ $a == "$b" ]]
+}
+
+# cs_eng_live_write LIVE_SIDS: our live.json on Drive while any session is open; trashed when none is.
+cs_eng_live_write() {
+  local id body f="$CS_HOME/staging/live.json"
+  id=$(cs_drive_state_get live_id)
+  if (($# == 0)); then
+    if [[ -n $id ]]; then
+      drv_trash "$id" >/dev/null || return
+      cs_drive_state_set live_id ""
+    fi
+    return 0
+  fi
+  body=$(cs_live_json "$@")
+  printf '%s\n' "$body" >"$f"
+  if [[ -n $id ]]; then
+    drv_update_content "$id" "$f" >/dev/null || return
+  else
+    id=$(drv_upload "$CS_MY_AREA" live.json "$f" "{\"csKind\":\"live\",\"csMachine\":\"$CS_ME\"}" | cs_jq -r .id) || return
+    [[ -n $id && $id != null ]] || return 1
+    cs_drive_state_set live_id "$id"
+  fi
+  rm -f -- "$f"
+}
+
+# cs_eng_live_read: other machines' live.json that are fresh (modifiedTime within 3 x that machine's interval of
+# the server's clock) -> status live_elsewhere {sid: {machine}}.
+cs_eng_live_read() {
+  local m mid id mt now iv name age out='{}' gz sids s
+  now=$(drv_server_time) || return 0
+  now=$(date -u -d "$now" +%s 2>/dev/null) || return 0
+  while IFS= read -r m; do
+    [[ -n $m ]] || continue
+    mid=$(cs_jq -r '.appProperties.csMachine // empty' <<<"$m")
+    [[ -n $mid && $mid != "$CS_ME" ]] || continue
+    mt=$(date -u -d "$(cs_jq -r .modifiedTime <<<"$m")" +%s 2>/dev/null) || continue
+    iv=$(cs_jq -r '.interval_min // 5' "$CS_HOME/state/remote/$mid.json" 2>/dev/null) || iv=5
+    [[ $iv =~ ^[0-9]+$ ]] || iv=5
+    age=$((now - mt))
+    ((age <= 3 * iv * 60)) || continue
+    gz="$CS_HOME/staging/live.$mid.json"
+    drv_download "$(cs_jq -r .id <<<"$m")" "$gz" || continue
+    name=$(cs_jq -r '.name // empty' "$CS_HOME/state/remote/$mid.json" 2>/dev/null) || name=''
+    sids=$(cs_jq -r '.sessions[]?' "$gz") || sids=''
+    rm -f -- "$gz"
+    while IFS= read -r s; do
+      [[ -n $s ]] || continue
+      out=$(cs_jq -c --arg s "$s" --arg n "${name:-$mid}" '.[$s] = {machine: $n}' <<<"$out")
+    done <<<"$sids"
+  done < <(drv_find_by_prop csKind live)
+  cs_status_live_elsewhere_set "$out"
 }
 
 # --- run outcome -----------------------------------------------------------------------------------------
@@ -681,7 +775,8 @@ cs_run() {
     fi
     if [[ -n $pick ]]; then
       if [[ $live == *" $sid "* ]]; then
-        cs_log info "run: $sid is open here; install deferred (#19)"
+        # Open here: never replace the file under Claude; tell the hook we are behind (SPEC §12.4).
+        cs_eng_mark_behind "$sid" "${pick%%$'\t'*}" "$bentry" "$pid" "$dir" "$lsize" "$lmt" "$ilen" "$isha" "$base" "$dry"
         continue
       fi
       ((dry)) && {
@@ -692,9 +787,21 @@ cs_run() {
       cs_eng_install "$sid" "$(cs_eng_remote_entry "${pick%%$'\t'*}" "$sid")" "$dir" "$ilen" "$base" || cs_eng_note_drv $?
       continue
     fi
+    if [[ $status == behind ]] && ((!dry)); then
+      cs_eng_row_set "$sid" "$pid" "$dir" "$lsize" "$lmt" "$ilen" "$isha" "${base:--}" synced
+      cs_status_behind_clear "$sid"
+    fi
     if ((changed)) || [[ -z $base ]]; then
       if ((rewrite)) && [[ $live == *" $sid "* ]]; then
-        cs_log info "run: $sid was rewritten while open; publishing deferred (#19)"
+        cs_log info "run: $sid was rewritten while open; publishing deferred until it is closed"
+        continue
+      fi
+      if ((rewrite)) && ! cs_eng_stable "$f"; then
+        cs_log info "run: $sid is still being rewritten; publishing deferred"
+        continue
+      fi
+      if [[ $live == *" $sid "* ]] && ! cs_eng_live_due "$sid"; then
+        cs_log info "run: $sid is open; its next publish is throttled"
         continue
       fi
       to_publish+=("$sid"$'\t'"$f"$'\t'"$pid"$'\t'"$dir"$'\t'"${ilen:-0}"$'\t'"$rewrite")
@@ -758,12 +865,20 @@ cs_run() {
       continue
     }
     cs_eng_time_left || break
-    cs_eng_publish "$sid" "$f" "$pid" "$dir" "$ilen" "$rw" || {
+    if cs_eng_publish "$sid" "$f" "$pid" "$dir" "$ilen" "$rw"; then
+      [[ $live == *" $sid "* ]] && date +%s >"$CS_HOME/state/live_pub.$sid"
+    else
       cs_eng_note_rc $?
       cs_log warn "run: publishing $sid failed; retried next cycle"
-    }
+    fi
   done
-  ((dry)) || cs_eng_publish_manifest || cs_eng_note_rc $?
+  if ((!dry)); then
+    local -a lv
+    read -r -a lv <<<"$live"
+    cs_eng_live_write "${lv[@]}" || cs_eng_note_rc $?
+    cs_eng_live_read || true
+    cs_eng_publish_manifest || cs_eng_note_rc $?
+  fi
   cs_say engine.summary "$CS_RUN_INSTALLED" "$CS_RUN_PUBLISHED"
   ((dry)) && return 0
   local state=OK

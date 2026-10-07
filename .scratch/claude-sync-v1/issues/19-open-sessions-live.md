@@ -23,3 +23,7 @@ Spec: SPEC §9.3, §12.4, §12.7 bước 6–7
 - [ ] Người dùng `/resume` đúng lúc engine đang localize file lớn → huỷ cài, không mất dòng (**M5**).
 - [ ] Session 58 MB mở cả ngày → mỗi lần công bố chỉ upload phần đuôi (**M8**).
 - [ ] Máy C chết khi đang mở S; đồng hồ máy lệch → `live.json` cũ bị bỏ qua đúng hạn (**F8**).
+
+## Comments
+
+- 2026-10-07: làm `behind` (DB + status.json), throttle `throttle_live_min`, hoãn viết lại khi đang mở + đọc ổn định 2 lần (`CS_STABLE_WAIT`), kiểm tra registry sau `mv` → behind, `live.json` ghi/xoá (trash) và đọc theo độ mới của server (`live_elsewhere`). Test `test/live.bats`: H3, throttle, M8, H4, F8. Chưa có test riêng cho M5 (huỷ cài khi `/resume` đúng lúc localize): so-và-đổi trước `mv` đã có từ #17 nhưng cần hook test để chèn registry giữa chừng.
