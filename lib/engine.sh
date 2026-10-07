@@ -244,6 +244,42 @@ cs_eng_publish() {
   CS_RUN_PUBLISHED=$((CS_RUN_PUBLISHED + 1))
 }
 
+# cs_eng_reloc_target SID ENTRY DIR: the projects/ subdir an installed session must move to because its
+# launch dir changed on another machine (a new "relocated" line); empty = stay. A project that is not mapped
+# here (or outside every project) keeps the old place: membership is fixed, only the location is not.
+cs_eng_reloc_target() {
+  local sid=$1 entry=$2 dir=$3 new old pid nd
+  new=$(cs_jq -r '.launch // empty' <<<"$entry")
+  old=$(cs_jq -r '.launch // empty' <"$(cs_eng_entry_file "$sid")" 2>/dev/null) || old=''
+  [[ -n $new && -n $old && $new != "$old" ]] || return 0
+  pid=$(cs_jq -r '.project // empty' <<<"$entry")
+  if cs_tsv_rows projects | cut -f1,6 | grep -qx "$pid"$'\t'1; then
+    nd=$(cs_eng_place "$pid" "$(cs_eng_local_path "$new")") || nd=''
+    [[ -n $nd && $nd != "$dir" ]] && printf '%s\n' "$nd"
+  else
+    cs_log info "run: $sid was relocated to a place not mapped here; it stays in $dir"
+  fi
+  return 0
+}
+
+# cs_eng_move SID FROM_DIR TO_DIR (SPEC §8.5): copy, verify, rename; the old file is removed only when it is
+# a different file from the new one (a case-insensitive volume may make them the same).
+cs_eng_move() {
+  local src="$CS_PDIR/$2/$1.jsonl" dst="$CS_PDIR/$3/$1.jsonl" tmp
+  tmp="$dst.csync-tmp"
+  mkdir -p -- "$CS_PDIR/$3"
+  [[ -e $dst && ! $dst -ef $src ]] && return 1
+  cp -p -- "$src" "$tmp" || return 1
+  if ! cmp -s -- "$src" "$tmp"; then
+    rm -f -- "$tmp"
+    return 1
+  fi
+  mv -f -- "$tmp" "$dst" || return 1
+  [[ $dst -ef $src ]] || rm -f -- "$src"
+  if [[ -d $CS_PDIR/$2/$1 && ! -e $CS_PDIR/$3/$1 ]]; then mv -- "$CS_PDIR/$2/$1" "$CS_PDIR/$3/$1"; fi
+  return 0
+}
+
 # --- install --------------------------------------------------------------------------------------------
 
 # cs_eng_install SID ENTRY [DIR ILEN BASE]: install the candidate ENTRY. With BASE (our local file is
@@ -255,6 +291,8 @@ cs_eng_install() {
     dir=$(cs_eng_place "$pid" "$(cs_eng_local_path "$(cs_jq -r '.launch // empty' <<<"$entry")")") || return 1
   fi
   f="$CS_PDIR/$dir/$sid.jsonl"
+  local reloc=''
+  [[ -n ${3:-} && -n $base ]] && reloc=$(cs_eng_reloc_target "$sid" "$entry" "$dir")
   if cs_eng_dup_elsewhere "$sid" "$f"; then
     cs_log warn "run: $sid exists in another project dir; needs repair"
     cs_eng_row_set "$sid" "$pid" "$dir" 0 0 0 - "${base:--}" needs_repair
@@ -326,6 +364,14 @@ cs_eng_install() {
     return 1
   }
   local size head
+  if [[ -n $reloc ]]; then
+    if cs_eng_move "$sid" "$dir" "$reloc"; then
+      cs_log info "run: $sid moved from $dir to $reloc (relocated on another machine)"
+      dir=$reloc f="$CS_PDIR/$dir/$sid.jsonl"
+    else
+      cs_log warn "run: $sid could not be moved to $reloc; it stays in $dir"
+    fi
+  fi
   size=$(stat -c %s -- "$f")
   head=$(cs_jq -r .head <<<"$entry")
   cs_eng_row_set "$sid" "$pid" "$dir" "$size" "$mt" "$size" "$(<"$shaf")" "$head" synced
@@ -358,7 +404,7 @@ cs_eng_chat_uuids() {
 # cs_eng_cutoff PROJECT_ID: mtime below which Claude here would sweep a session (SPEC §12.9); 0 when it never sweeps.
 cs_eng_cutoff() {
   local root days
-  root=$(cs_tsv_rows projects | I=$1 "$CS_AWK" -F'	' '$1 == ENVIRON["I"] && $6 == 1 { print $2; exit }')
+  root=$(cs_tsv_rows projects | I=$1 "$CS_AWK" -F'\t' '$1 == ENVIRON["I"] && $6 == 1 { print $2; exit }')
   days=$(cs_claude_retention_days "$(cs_posix_of_native "$root")")
   if ((days == 0)); then echo 0; else echo $(($(date +%s) - days * 86400)); fi
 }
@@ -508,6 +554,14 @@ cs_run() {
       pid=${r[1]} dir=${r[2]} lsize=${r[3]} lmt=${r[4]} ilen=${r[5]} isha=${r[6]} base=${r[7]} status=${r[9]}
       [[ $base == - ]] && base=''
       [[ $status == needs_repair ]] && continue
+      if [[ $slug != "$dir" && $base != '' ]]; then
+        # Claude moved the transcript (/cd, EnterWorktree): the session keeps syncing; the new launch dir
+        # decides its project, or "unmapped" outside every project (SPEC §8.3, ticket #18).
+        dir=$slug
+        pid=$(cs_project_of_cwd "$(cs_launch_cwd "$f" 2>/dev/null || echo)" 2>/dev/null) || pid=unmapped
+        ((dry)) || cs_eng_row_set "$sid" "$pid" "$dir" "$lsize" "$lmt" "$ilen" "$isha" "$base" "$status"
+        cs_log info "run: $sid was moved to $dir (project $pid)"
+      fi
       if [[ $pid == - ]]; then
         # Not in a mapped project when first seen: the user may have mapped it since.
         pid=$(cs_project_of_cwd "$(cs_launch_cwd "$f" 2>/dev/null || echo)" 2>/dev/null) || pid=-
@@ -581,10 +635,10 @@ cs_run() {
   # 2. Sessions that exist only on other machines, or that were installed here and are gone.
   local mid head proj cutoff e emt skipped=0
   : >"$CS_HOME/state/retention_skipped"
-  while IFS=$'	' read -r mid sid head proj; do
+  while IFS=$'\t' read -r mid sid head proj; do
     [[ -n $sid && -z ${seen[$sid]:-} ]] || continue
     seen[$sid]=1
-    cs_tsv_rows projects | cut -f1,6 | grep -qx "$proj"$'	'1 || continue # not mapped here (#31)
+    cs_tsv_rows projects | cut -f1,6 | grep -qx "$proj"$'\t'1 || continue # not mapped here (#31)
     cutoff=$(cs_eng_cutoff "$proj")
     dir='' base=''
     if row=$(cs_tsv_get sessions "$sid"); then
@@ -606,21 +660,18 @@ cs_run() {
     fi
     bentry=''
     [[ -n $base ]] && bentry=$(cat -- "$(cs_eng_entry_file "$sid")" 2>/dev/null || true)
-    pick=$(cs_eng_pick "$sid" "$bentry" "$(printf '%s
-' "$table" | S=$sid "$CS_AWK" -F'	' -v OFS='	' '$2 == ENVIRON["S"] { print $1, $3 }')")
+    pick=$(cs_eng_pick "$sid" "$bentry" "$(printf '%s\n' "$table" | S=$sid "$CS_AWK" -F'\t' -v OFS='\t' '$2 == ENVIRON["S"] { print $1, $3 }')")
     [[ -n $pick && $pick != CONFLICT* ]] || continue
-    e=$(cs_eng_remote_entry "${pick%%$'	'*}" "$sid")
+    e=$(cs_eng_remote_entry "${pick%%$'\t'*}" "$sid")
     emt=$(cs_jq -r '.mtime // empty' <<<"$e")
     [[ $emt =~ ^[0-9]+$ ]] || emt=$(date +%s)
     if ((emt < cutoff)); then
-      printf '%s	%s
-' "$sid" "$emt" >>"$CS_HOME/state/retention_skipped"
+      printf '%s\t%s\n' "$sid" "$emt" >>"$CS_HOME/state/retention_skipped"
       skipped=$((skipped + 1))
       continue
     fi
     ((dry)) && {
-      printf 'install %s
-' "$sid"
+      printf 'install %s\n' "$sid"
       continue
     }
     cs_eng_time_left || continue
@@ -661,11 +712,11 @@ cs_restore() {
     return "$CS_EXIT_ERROR"
   }
   cs_eng_fetch_remotes
-  cands=$(cs_eng_candidates_table | S=$sid "$CS_AWK" -F'	' -v OFS='	' '$2 == ENVIRON["S"] { print $1, $3 }')
+  cands=$(cs_eng_candidates_table | S=$sid "$CS_AWK" -F'\t' -v OFS='\t' '$2 == ENVIRON["S"] { print $1, $3 }')
   pick=$(cs_eng_cands_by_size "$sid" "$cands" | head -n 1)
   [[ -n $pick ]] || cs_die_t "$CS_EXIT_ERROR" restore.not_found "$sid"
   cs_eng_dup_elsewhere "$sid" "" && cs_die_t "$CS_EXIT_ERROR" restore.exists "$sid"
-  IFS=$'	' read -r r pick _ <<<"$pick"
+  IFS=$'\t' read -r r pick _ <<<"$pick"
   e=$(cs_eng_remote_entry "$pick" "$sid")
   if row=$(cs_tsv_get sessions "$sid"); then
     cs_tsv_split "$row" r2

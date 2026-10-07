@@ -354,3 +354,62 @@ sim_cli() { # NAME ARGS...
   [ "$(sim_exec B 'cs_tsv_field sessions status "$1"' "$SID")" = local_absent_retention ]
   [ -n "$(sim_find A "$SID")" ]
 }
+
+# --- ticket #18 slice 4: relocate (SPEC §8.3, §8.5) -------------------------------------------------------
+
+# a_move_to DIRNAME RELOCATED_CWD: Claude on A moves the session to another projects/ dir and appends a relocated line.
+a_move_to() {
+  local src="$SIM/A/claude/projects/$ASLUG/$SID.jsonl" dst="$SIM/A/claude/projects/$1"
+  mkdir -p "$dst"
+  mv "$src" "$dst/$SID.jsonl"
+  printf '%s
+' "{\"type\":\"relocated\",\"relocatedCwd\":\"$2\"}" >>"$dst/$SID.jsonl"
+}
+
+@test "M11: /cd to another folder of the project moves the file on B too (copy, verify, rename; old copy removed)" {
+  mkdir -p "$BROOT/apps"
+  sim_write A "$ASLUG" "$SID" "$(uline 1)" "$(uline 2)"
+  sim_run A >/dev/null
+  sim_run B >/dev/null
+  [ -f "$SIM/B/claude/projects/$BSLUG/$SID.jsonl" ]
+  a_move_to D--Projects-X-apps 'D:\\Projects\\X\\apps'
+  run sim_run A
+  [[ $output == *'0 installed, 1 published'* ]]
+  run sim_run B
+  echo "$output"
+  [[ $output == *'1 installed, 0 published'* ]]
+  NEW="$SIM/B/claude/projects/$(cc_slug "$BROOT/apps")/$SID.jsonl"
+  [ -f "$NEW" ]
+  [ ! -e "$SIM/B/claude/projects/$BSLUG/$SID.jsonl" ]
+  [ "$(sim_find B "$SID" | wc -l)" -eq 1 ]
+  [ "$(wc -l <"$NEW")" -eq 3 ]
+  grep -qF "\"relocatedCwd\":\"$BROOT/apps\"" "$NEW"
+  for m in A B A B; do
+    run sim_run "$m"
+    [[ $output == *'0 installed, 0 published'* ]] || { echo "$m: $output"; return 1; }
+  done
+}
+
+@test "P8b: /cd out of every project: the session keeps syncing and stays where it was on B" {
+  sim_write A "$ASLUG" "$SID" "$(uline 1)"
+  sim_run A >/dev/null
+  sim_run B >/dev/null
+  a_move_to D--Elsewhere 'E:\\Elsewhere'
+  run sim_run A
+  [[ $output == *'0 installed, 1 published'* ]]
+  run sim_run B
+  [[ $output == *'1 installed, 0 published'* ]]
+  [ -f "$SIM/B/claude/projects/$BSLUG/$SID.jsonl" ]
+  [ "$(wc -l <"$SIM/B/claude/projects/$BSLUG/$SID.jsonl")" -eq 2 ]
+  printf '%s
+' "$(uline 9)" >>"$SIM/A/claude/projects/D--Elsewhere/$SID.jsonl"
+  run sim_run A
+  [[ $output == *'0 installed, 1 published'* ]]
+  run sim_run B
+  [[ $output == *'1 installed, 0 published'* ]]
+  [ "$(wc -l <"$SIM/B/claude/projects/$BSLUG/$SID.jsonl")" -eq 3 ]
+  for m in A B; do
+    run sim_run "$m"
+    [[ $output == *'0 installed, 0 published'* ]] || { echo "$m: $output"; return 1; }
+  done
+}
