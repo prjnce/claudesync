@@ -92,6 +92,7 @@ cs_eng_fetch_remotes() {
     gz="$CS_HOME/staging/remote.$mid.gz"
     drv_download "$id" "$gz" || {
       cs_log warn "run: could not download the manifest of $mid"
+      CS_RUN_REMOTE_FAIL=1
       continue
     }
     if j=$(cs_manifest_read "$gz"); then
@@ -685,7 +686,7 @@ cs_run() {
   }
   cs_eng_load || return
   cs_log_rotate
-  CS_RUN_DRV_RC=0 CS_RUN_FAILS=0
+  CS_RUN_DRV_RC=0 CS_RUN_FAILS=0 CS_RUN_REMOTE_FAIL=0
   local j
   while IFS= read -r j; do [[ -n $j ]] && cs_journal_abandon "$j"; done < <(cs_journal_pending)
   local prc=0
@@ -895,6 +896,7 @@ cs_run() {
     cs_eng_live_write "${lv[@]}" || cs_eng_note_rc $?
     cs_eng_live_read || true
     cs_eng_publish_manifest || cs_eng_note_rc $?
+    cs_gc_run || true
   fi
   cs_say engine.summary "$CS_RUN_INSTALLED" "$CS_RUN_PUBLISHED"
   ((dry)) && return 0

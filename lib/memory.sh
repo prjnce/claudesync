@@ -88,7 +88,8 @@ cs_dsync_run() {
   local kind=$1 scope=$2 ldir=$3 base rel lf bf rf Lv bv rv st mid rid rmt bsha ms
   shift 3
   base="$CS_HOME/state/base/$kind/$scope"
-  mkdir -p -- "$base" "$ldir"
+  mkdir -p -- "$base" 2>/dev/null || return 0
+  mkdir -p -- "$ldir" 2>/dev/null || return 0
   local -A rem=() want=()
   local r f del sha id m mt
   for r in "$@"; do want[$r]=1; done
