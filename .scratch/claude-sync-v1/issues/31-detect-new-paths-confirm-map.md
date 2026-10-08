@@ -1,6 +1,6 @@
 # 31 — Phát hiện path mới, gợi ý và xác nhận map
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M4
@@ -38,20 +38,22 @@ Không suy ra được path ở máy nhận một cách chắc chắn, nên engi
 
 ## Tiêu chí nghiệm thu
 
-- [ ] 3 máy giả lập với root như bảng trên: B và C thấy mục chờ map `TransFlow`; ứng viên hạng 1 của C là `~/projects/TransFlowX` (lý do: tên prefix); của B là `/mnt/d/projects/TransFlowY`.
-- [ ] B có sẵn `/mnt/d/Projects/TransFlow` (cùng ổ với A) → ứng viên hạng 1 là path tương đương, kèm cảnh báo `/mnt`.
-- [ ] Máy C có repo cùng remote nhưng tên thư mục khác hẳn (`~/code/tf-server`) → vẫn là ứng viên, lý do "cùng git remote", xếp trên ứng viên chỉ khớp tên.
-- [ ] Manifest sinh ra chỉ có `remote_keys` dạng hex 64 ký tự; không có `github.com`, `@`, hay token giả trong nội dung manifest đã giải nén.
-- [ ] Không bao giờ tự map: chạy `run` nhiều lần với một ứng viên duy nhất → vẫn ở trạng thái chờ.
-- [ ] Người dùng đổi tên `D:\Projects\TransFlow` → `D:\Projects\TransFlow2` và chạy Claude ở đó → mục `local` được tạo, ứng viên là "thêm làm root phụ của TransFlow"; chọn xong thì session mới được sync vào cùng project.
-- [ ] `exclude` thì không bao giờ báo lại; `skip` thì báo lại khi có session mới.
-- [ ] Chọn path lồng trong root của project khác → cảnh báo, phải xác nhận lần 2.
-- [ ] Sau khi map: session `waiting_map` được cài vào đúng thư mục slug, cwd được dịch sang root mới.
-- [ ] Bước tìm ứng viên không vượt giới hạn thời gian khi `scan_dirs` có hàng nghìn thư mục.
+- [x] 3 máy giả lập với root như bảng trên: B và C thấy mục chờ map `TransFlow`; ứng viên hạng 1 của C là `~/projects/TransFlowX` (lý do: tên prefix); của B là `/mnt/d/projects/TransFlowY`.
+- [x] B có sẵn `/mnt/d/Projects/TransFlow` (cùng ổ với A) → ứng viên hạng 1 là path tương đương, kèm cảnh báo `/mnt`.
+- [x] Máy C có repo cùng remote nhưng tên thư mục khác hẳn (`~/code/tf-server`) → vẫn là ứng viên, lý do "cùng git remote", xếp trên ứng viên chỉ khớp tên.
+- [x] Manifest sinh ra chỉ có `remote_keys` dạng hex 64 ký tự; không có `github.com`, `@`, hay token giả trong nội dung manifest đã giải nén.
+- [x] Không bao giờ tự map: chạy `run` nhiều lần với một ứng viên duy nhất → vẫn ở trạng thái chờ.
+- [x] Người dùng đổi tên `D:\Projects\TransFlow` → `D:\Projects\TransFlow2` và chạy Claude ở đó → mục `local` được tạo, ứng viên là "thêm làm root phụ của TransFlow"; chọn xong thì session mới được sync vào cùng project.
+- [x] `exclude` thì không bao giờ báo lại; `skip` thì báo lại khi có session mới.
+- [x] Chọn path lồng trong root của project khác → cảnh báo, phải xác nhận lần 2.
+- [x] Sau khi map: session `waiting_map` được cài vào đúng thư mục slug, cwd được dịch sang root mới.
+- [x] Bước tìm ứng viên không vượt giới hạn thời gian khi `scan_dirs` có hàng nghìn thư mục.
 
 ## Comments
 
 **2026-10-06 — quyết định của người dùng (SPEC §6.1 đã cập nhật):** ở chế độ `all`, thư mục local mới không giống project nào → **tự thêm** thành project mới (ghi log + báo trong `status`); thư mục mới giống project đã có (cùng `remote_keys` / ứng viên tên-path) → hỏi gộp làm root phụ; project từ máy khác → luôn hỏi thư mục. Chế độ `selected` → không tự thêm gì. Cần thêm tiêu chí nghiệm thu:
-- [ ] `mode all`: mở Claude trong thư mục mới hoàn toàn → chu kỳ sau thư mục đó thành project và session được công bố, không cần người dùng làm gì.
-- [ ] `mode all`: thư mục mới cùng git remote với project đã có → không tự thêm, xuất hiện trong `projects pending` với gợi ý "root phụ".
-- [ ] `mode selected`: thư mục mới chỉ hiện trong `projects list` mục chưa sync.
+- [x] `mode all`: mở Claude trong thư mục mới hoàn toàn → chu kỳ sau thư mục đó thành project và session được công bố, không cần người dùng làm gì.
+- [x] `mode all`: thư mục mới cùng git remote với project đã có → không tự thêm, xuất hiện trong `projects pending` với gợi ý "root phụ".
+- [x] `mode selected`: thư mục mới chỉ hiện trong `projects list` mục chưa sync.
+
+- 2026-10-08: xong. `lib/pending.sh`: manifest.projects (chỉ băm remote_keys), phát hiện (a) remote / (b) local, `pending_map.tsv` + `status.waiting_map` (+ `auto_added`), ứng viên (path tương đương, thư mục Claude đã chạy + tên, cùng git remote, tên; quét có ngân sách `CS_PEND_SCAN_BUDGET` và cache `state/scan_cache.tsv`, làm tiếp ở chu kỳ sau), `projects pending`, `projects map` không tham số (duyệt: số / p / r / s / x; kiểm tra tồn tại, lồng root hỏi lại, cảnh báo /mnt), `cs_project_map` nhận project_id của máy khác, mode `all` tự thêm thư mục không giống gì, mode `selected` không thêm. Dạng ứng viên trong cột `candidates`: `path|lý do|điểm;...` (dùng `|` vì path Windows có `:`). Test `test/pending.bats` (8 ca). Chưa có: `sync --project <alias>` (cài ngay sau khi map) và việc hook/wrapper/setup đọc `waiting_map` (#27, #28, #29).

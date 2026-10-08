@@ -152,7 +152,7 @@ main() {
       ;;
     projects)
       cs_bootstrap
-      cs_use platform version store claude transform projects ui cmd_projects
+      cs_use platform version manifest store claude transform projects ui cmd_projects status pending
       cs_store_init
       cmd_projects "$@"
       ;;
@@ -181,12 +181,12 @@ main() {
       local a
       for a in "$@"; do [[ $a == --trigger=* ]] && CS_TRIGGER=${a#--trigger=}; done
       cs_bootstrap
-      cs_use platform version manifest store claude transform projects drive root status engine bundle memory gc
+      cs_use platform version manifest store claude transform projects drive root status engine bundle memory gc cmd_projects ui pending
       if [[ " $* " == *" --dry-run "* ]]; then cs_run --dry-run; else cs_run; fi
       ;;
     restore)
       cs_bootstrap
-      cs_use platform version manifest store claude transform projects drive root status engine bundle memory gc
+      cs_use platform version manifest store claude transform projects drive root status engine bundle memory gc cmd_projects ui pending
       cs_restore "$@"
       ;;
     status)
@@ -201,7 +201,7 @@ main() {
       ;;
     machines)
       cs_bootstrap
-      cs_use platform version manifest store claude transform projects drive root status engine bundle memory gc ui
+      cs_use platform version manifest store claude transform projects drive root status engine bundle memory gc cmd_projects ui pending ui
       cs_machines "$@"
       ;;
     conflicts | \

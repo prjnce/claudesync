@@ -705,6 +705,7 @@ cs_run() {
     return "$CS_EXIT_ERROR"
   }
   cs_eng_fetch_remotes
+  ((dry)) || cs_pend_detect || true
   local table
   table=$(cs_eng_candidates_table)
   CS_RUN_PUBLISHED=0 CS_RUN_INSTALLED=0
@@ -895,6 +896,7 @@ cs_run() {
     read -r -a lv <<<"$live"
     cs_eng_live_write "${lv[@]}" || cs_eng_note_rc $?
     cs_eng_live_read || true
+    cs_pend_publish_projects || true
     cs_eng_publish_manifest || cs_eng_note_rc $?
     cs_gc_run || true
   fi

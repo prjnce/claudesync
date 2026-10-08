@@ -97,6 +97,10 @@ cmd_projects() {
     list) cs_projects_list ;;
     select) cs_projects_select ;;
     map)
+      if (($# == 0)); then
+        cs_pend_review
+        return 0
+      fi
       (($# == 2)) || cs_die_t "$CS_EXIT_USAGE" projects.usage_map
       local id root state
       IFS=$'\t' read -r id root state < <(cs_project_map "$1" "$2")
@@ -129,7 +133,7 @@ cmd_projects() {
         printf '%s %s %s %s\n' "$(cs_pad "$n" 8)" "$(cs_pad "$(cs_human_bytes "$bytes")" 10)" "$(cs_pad "$cwd" 50)" "$slug"
       done < <(cs_claude_projects_report)
       ;;
-    pending) cs_die_t "$CS_EXIT_ERROR" cli.not_implemented "projects pending" ;;
+    pending) cs_pend_list ;;
     *) cs_die_t "$CS_EXIT_USAGE" cli.unknown_command "projects $sub" ;;
   esac
 }
