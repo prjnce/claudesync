@@ -59,7 +59,10 @@ cs_manifest_session() {
 # unless given.
 cs_manifest_put_session() {
   cs_jq -c --arg s "$2" --argjson e "$3" --arg p "${4:-}" --arg l "${5:-}" '
-    .sessions[$s] = ((.sessions[$s] // {}) + $e
+    (.sessions[$s] // {}) as $old
+    | .sessions[$s] = ($old + $e
+      + (if ($old.files // $e.files) then {files: (($old.files // {}) + ($e.files // {}))} else {} end)
+      + (if ($old.subagents // $e.subagents) then {subagents: (($old.subagents // {}) + ($e.subagents // {}))} else {} end)
       + (if $p != "" then {project: $p} else {} end)
       + (if $l != "" then {launch: $l} else {} end))' <<<"$1"
 }

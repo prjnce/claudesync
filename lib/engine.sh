@@ -333,6 +333,13 @@ cs_eng_install() {
     cs_journal_end "$jr"
     return 1
   fi
+  if [[ ! -e $f ]]; then
+    # A new session: its bundle and subagent transcripts first, so the transcript never points at files that
+    # are not there yet (SPEC §12.7 step 4). A crash here is finished by the next cycle.
+    cs_bundle_remote_install "$sid" "$dir"
+    cs_agent_sync "$sid" "$dir" || true
+    [[ -z ${CS_TEST_CRASH_AFTER_BUNDLE:-} ]] || exit 99
+  fi
   if ((start == 0)) && [[ -f $f ]] && (($(cs_eng_deleted_uuids "$f" "$tmp") > CS_REWRITE_MAX_DELETED)); then
     # SPEC §12.4: a replacement that drops more than a few chat lines is a divergence, not a rewrite.
     cs_log warn "run: $sid: the new version drops too many chat lines; kept as it is (forks: #20)"
@@ -873,6 +880,16 @@ cs_run() {
     fi
   done
   if ((!dry)); then
+    # 4. Bundles and subagent transcripts of every synced session.
+    local bdir
+    while IFS=$'\t' read -r sid bdir; do
+      cs_eng_time_left || break
+      cs_bundle_sync "$sid" "$bdir" || true
+      cs_agent_sync "$sid" "$bdir" || true
+    done < <(cs_tsv_rows sessions | "$CS_AWK" -F'\t' -v OFS='\t' '$10 == "synced" && $8 != "-" { print $1, $3 }')
+    # 5. Memory (3-way merge) and plans.
+    cs_eng_time_left && cs_mem_sync || true
+    cs_eng_time_left && cs_plans_sync || true
     local -a lv
     read -r -a lv <<<"$live"
     cs_eng_live_write "${lv[@]}" || cs_eng_note_rc $?

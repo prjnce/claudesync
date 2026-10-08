@@ -1,6 +1,6 @@
 # 21 — Bundle, subagent, file-history
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M4
@@ -18,7 +18,11 @@ Spec: SPEC §4.3, §9.1 (`f/`, `sa/`), §12.7 bước 4, §13 (3 dòng đầu), 
 
 ## Tiêu chí nghiệm thu
 
-- [ ] Session có subagent, tool-results, file-history từ A mở được trên B, có đủ dữ liệu (**A1** phần dữ liệu).
-- [ ] Crash giữa lúc giải nén bundle và đổi tên transcript → chạy lại hoàn tất; Claude ở B đã dọn `tool-results` cũ → không tải lại trừ khi có version mới (**M7**).
-- [ ] `/rewind` trên B: file-history có path đã dịch, mode thực thi được giữ (**A6**, kiểm thật ở #30).
-- [ ] Test: không file nào trong danh sách cấm (§4.3) được upload.
+- [x] Session có subagent, tool-results, file-history từ A mở được trên B, có đủ dữ liệu (**A1** phần dữ liệu).
+- [x] Crash giữa lúc giải nén bundle và đổi tên transcript → chạy lại hoàn tất; Claude ở B đã dọn `tool-results` cũ → không tải lại trừ khi có version mới (**M7**).
+- [x] `/rewind` trên B: file-history có path đã dịch, mode thực thi được giữ (**A6**, kiểm thật ở #30).
+- [x] Test: không file nào trong danh sách cấm (§4.3) được upload.
+
+## Comments
+
+- 2026-10-08: `lib/bundle.sh` (bundle files, sidecars, tasks/uploads/file-history, subagent chains), manifest `files`/`subagents` merge, cài bundle trước transcript, hook test `CS_TEST_CRASH_AFTER_BUNDLE`. Tên object phẳng trong vùng máy: `f-<sid>-<sha16>-<relpath mã hoá>` và `t-<sid>-a-<agent>-<seq>-<sha16>.jsonl.gz`. rel dùng tiền tố `_p/` cho `projects/<dir>/` (MSYS đổi `@/...` thành đường dẫn Windows). `/rewind` thật (A6) để #30. Upload bundle không có journal: nếu crash giữa upload và manifest, lần sau tạo object mới (object mồ côi do #23 dọn).
