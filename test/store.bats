@@ -149,8 +149,11 @@ row() { local IFS=$'\t'; printf '%s\n' "$*"; }
     cs_journal_begin install "{\"tmp\":[\"$tmpf\",\"$keep\"]}" >/dev/null
     sleep 30
   ) >/dev/null 2>&1 3>&- &
-  local pid=$!
-  sleep 1
+  local pid=$! i
+  for i in $(seq 1 100); do # the journal entry must exist before the kill (slow machines)
+    [[ -n $(ls "$CLAUDE_SYNC_HOME"/journal/*.json 2>/dev/null) ]] && break
+    sleep 0.2
+  done
   kill -9 "$pid"
   wait "$pid" 2>/dev/null || true
   run cs_journal_pending
