@@ -43,6 +43,7 @@ cs_bundle_abs() {
   local -a parts
   IFS=/ read -r -a parts <<<"$rel"
   for part in "${parts[@]}"; do
+    # shellcheck disable=SC1003 # a literal backslash
     [[ $part != *[':?*"<>|']* && $part != *'\'* && $part != *. && $part != *' ' ]] || return 1
   done
   printf '%s\n' "$cc/$p"
@@ -178,7 +179,7 @@ cs_bundle_remote_install() {
     fi
     mkdir -p -- "$(dirname -- "$abs")"
     chmod "$mode" "$tmp" 2>/dev/null || true
-    mv -f -- "$tmp" "$abs.csync-tmp" && mv -f -- "$abs.csync-tmp" "$abs" || continue
+    if ! { mv -f -- "$tmp" "$abs.csync-tmp" && mv -f -- "$abs.csync-tmp" "$abs"; }; then continue; fi
     read -r size mt < <(stat -c '%s %Y' -- "$abs")
     rsha[$rel]=$sha rsize[$rel]=$size rmt[$rel]=$mt
     any=1

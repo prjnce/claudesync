@@ -125,9 +125,9 @@ cs_pend_keys_intersect() { # "a,b" "c,d" -> rc 0 if they share a key
 
 # cs_pend_cands_remote ALIAS ROOTS("|"-separated) KEYS: "score<TAB>path<TAB>reason" lines, best first.
 cs_pend_cands_remote() {
-  local alias=$1 roots=$2 keys=$3 r e d k ns base cache="$CS_HOME/state/scan_cache.tsv" root n
+  local alias=$1 rlist=$2 keys=$3 r e d k ns base cache="$CS_HOME/state/scan_cache.tsv" root n
   local -a rr=()
-  IFS='|' read -r -a rr <<<"$roots"
+  IFS='|' read -r -a rr <<<"$rlist"
   for r in "${rr[@]}"; do
     e=$(cs_pend_equiv "$r") || continue
     [[ -d $(cs_posix_of_native "$e") ]] && printf '10\t%s\tpath_equivalent\n' "$e"

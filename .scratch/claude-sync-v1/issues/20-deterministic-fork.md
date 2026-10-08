@@ -28,3 +28,7 @@ Spec: SPEC §12.5, §11 (`forks.tsv`), §20 (`conflicts`), §1.4 A4
 - [ ] 2 máy tự tính độc lập ra cùng thắng/thua và cùng `fork_sid`, kể cả khi chạy theo thứ tự khác nhau (**H2**).
 - [ ] Session tách có đủ subagent, file-history, plan, tiêu đề; chạy lại không sinh bản thứ 2 (**M10**).
 - [ ] `claude --resume <fork_sid>` mở được (kiểm bằng `--resume` trên máy thật ở #30).
+
+## Comments
+
+- 2026-10-08: code xong, test chưa chạy hết. `lib/fork.sh` (`cs_fork_resolve`, `cs_fork_compare`, `cs_fork_materialize`, `cs_fork_known_from_manifests`, lệnh `claude-sync conflicts [list|show]`), `forks.tsv`, `forked{}` trong manifest (gộp sâu ở `cs_manifest_put_session`), `CS_INSTALL_FORCE` để cài bản thắng. Tiêu chí còn lại trong `test/fork.bats` (5 ca: A4/F1, H2, đối xứng, M10, nhánh chỉ metadata): ca A4/F1 đã qua, 4 ca còn lại chưa có kết quả khi dừng. Lỗi đã gặp: `cmp`/`awk exit` + `set -e -o pipefail` làm chu kỳ dừng im lặng; phải gắn `|| true` ở các phép gán từ pipeline có thể trả mã khác 0. Chưa tick tiêu chí nghiệm thu, status giữ nguyên needs-triage.

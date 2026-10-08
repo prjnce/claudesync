@@ -147,6 +147,15 @@ declare -gA CS_MSG_en=(
   [engine.busy]='Another claude-sync run is in progress; nothing to do.'
   [engine.root_missing]='The root folder on Google Drive is missing or in the trash (ROOT_MISSING); nothing was synced.'
   [engine.summary]='Sync done: %s installed, %s published.'
+  [conflicts.row]='Session %s was forked: the other branch is session %s (%s)'
+  [conflicts.memory]='Memory or plan with both-sides changes: %s (the other version is in conflicts/)'
+  [conflicts.none]='No conflicts.'
+  [conflicts.usage]='Usage: claude-sync conflicts [list|show <session-id>]'
+  [conflicts.show]='Session %s
+  forked branch: %s
+  losing version: %s
+  when: %s'
+  [conflicts.unknown]='No conflict is recorded for %s.'
   [pending.row_remote]='Project %s from %s (roots there: %s): %s sessions, %s'
   [pending.row_local]='Folder %s has %s Claude sessions (%s) that are not synced.'
   [pending.cand]='  %s) %s %s'

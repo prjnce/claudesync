@@ -67,11 +67,13 @@ cs_machines() {
       cs_eng_load || return
       cs_eng_fetch_remotes
       cs_say machines.header
-      local mid name os upd n me
+      local mid name os upd n me this
       me=$(cs_config_get machine_id "")
       while IFS=$'\t' read -r mid name os upd n; do
         [[ -n $mid ]] || continue
-        cs_say machines.row "$name" "$os" "${upd:--}" "$n" "$([[ $mid == "$me" ]] && cs_t machines.this || true)"
+        this=""
+        if [[ $mid == "$me" ]]; then this=$(cs_t machines.this); fi
+        cs_say machines.row "$name" "$os" "${upd:--}" "$n" "$this"
       done < <(cs_machines_table)
       ;;
     forget) cs_machines_forget "$@" ;;

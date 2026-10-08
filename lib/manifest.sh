@@ -63,6 +63,7 @@ cs_manifest_put_session() {
     | .sessions[$s] = ($old + $e
       + (if ($old.files // $e.files) then {files: (($old.files // {}) + ($e.files // {}))} else {} end)
       + (if ($old.subagents // $e.subagents) then {subagents: (($old.subagents // {}) + ($e.subagents // {}))} else {} end)
+      + (if ($old.forked // $e.forked) then {forked: (($old.forked // {}) + ($e.forked // {}))} else {} end)
       + (if $p != "" then {project: $p} else {} end)
       + (if $l != "" then {launch: $l} else {} end))' <<<"$1"
 }

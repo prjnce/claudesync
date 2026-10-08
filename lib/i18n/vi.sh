@@ -147,6 +147,15 @@ declare -gA CS_MSG_vi=(
   [engine.busy]='Đang có một lần chạy claude-sync khác; không làm gì thêm.'
   [engine.root_missing]='Folder gốc trên Google Drive không còn hoặc đang ở thùng rác (ROOT_MISSING); chưa sync gì.'
   [engine.summary]='Sync xong: cài %s, công bố %s.'
+  [conflicts.row]='Session %s đã tách nhánh: nhánh còn lại là session %s (%s)'
+  [conflicts.memory]='Memory/plan bị đổi ở cả hai bên: %s (bản kia nằm trong conflicts/)'
+  [conflicts.none]='Không có xung đột.'
+  [conflicts.usage]='Cách dùng: claude-sync conflicts [list|show <session-id>]'
+  [conflicts.show]='Session %s
+  nhánh tách: %s
+  version thua: %s
+  lúc: %s'
+  [conflicts.unknown]='Không có xung đột nào được ghi cho %s.'
   [pending.row_remote]='Project %s từ máy %s (root bên đó: %s): %s session, %s'
   [pending.row_local]='Thư mục %s có %s session Claude (%s) chưa được sync.'
   [pending.cand]='  %s) %s %s'

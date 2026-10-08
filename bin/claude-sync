@@ -181,12 +181,12 @@ main() {
       local a
       for a in "$@"; do [[ $a == --trigger=* ]] && CS_TRIGGER=${a#--trigger=}; done
       cs_bootstrap
-      cs_use platform version manifest store claude transform projects drive root status engine bundle memory gc cmd_projects ui pending
+      cs_use platform version manifest store claude transform projects drive root status engine bundle memory gc cmd_projects ui pending fork
       if [[ " $* " == *" --dry-run "* ]]; then cs_run --dry-run; else cs_run; fi
       ;;
     restore)
       cs_bootstrap
-      cs_use platform version manifest store claude transform projects drive root status engine bundle memory gc cmd_projects ui pending
+      cs_use platform version manifest store claude transform projects drive root status engine bundle memory gc cmd_projects ui pending fork
       cs_restore "$@"
       ;;
     status)
@@ -201,11 +201,15 @@ main() {
       ;;
     machines)
       cs_bootstrap
-      cs_use platform version manifest store claude transform projects drive root status engine bundle memory gc cmd_projects ui pending ui
+      cs_use platform version manifest store claude transform projects drive root status engine bundle memory gc cmd_projects ui pending fork ui
       cs_machines "$@"
       ;;
-    conflicts | \
-      service | hooks | config | claude | uninstall | kick)
+    conflicts)
+      cs_bootstrap
+      cs_use platform version manifest store claude transform projects drive root status engine bundle memory gc cmd_projects ui pending fork
+      cs_conflicts "$@"
+      ;;
+    service | hooks | config | claude | uninstall | kick)
       cs_bootstrap
       cs_die_t "$CS_EXIT_ERROR" cli.not_implemented "$cmd"
       ;;

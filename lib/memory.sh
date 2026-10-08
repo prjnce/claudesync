@@ -22,6 +22,7 @@ cs_dsync_name_ok() {
   for part in "${parts[@]}"; do
     [[ $part == .memory-sync* ]] && return 1
     if [[ ${CS_SEP:-$(cs_sep_style)} == w ]]; then
+      # shellcheck disable=SC1003 # a literal backslash
       [[ $part != *[':?*"<>|']* && $part != *'\'* && $part != *. && $part != *' ' ]] || return 1
     fi
   done

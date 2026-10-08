@@ -28,7 +28,7 @@ sim_exec() {
   env "${e[@]}" CS_SIM_CODE="$code" bash -c '
     set -uo pipefail
     source "$CS_ROOT/lib/core.sh"
-    for m in platform version manifest store claude transform projects drive root status engine bundle memory gc cmd_projects pending; do source "$CS_ROOT/lib/$m.sh"; done
+    for m in platform version manifest store claude transform projects drive root status engine bundle memory gc cmd_projects pending fork; do source "$CS_ROOT/lib/$m.sh"; done
     cs_bootstrap
     cs_store_init
     eval "$CS_SIM_CODE"' _ "$@"
