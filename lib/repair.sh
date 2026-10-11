@@ -67,6 +67,17 @@ cs_repair_files() {
   done
 }
 
+# cs_repair_needing: the "slug/<sid>.jsonl" paths that Claude could not load as they are (nothing is changed).
+cs_repair_needing() {
+  local rel size crs sp fo f
+  while IFS=$'\t' read -r rel size; do
+    [[ -n $rel ]] || continue
+    f="$(cs_claude_dir)/projects/$rel"
+    read -r crs sp fo < <(cs_repair_needs "$f")
+    if ((crs || sp || fo)); then printf '%s\n' "$rel"; fi
+  done < <(cs_repair_files)
+}
+
 # cs_repair_sid_of REL: the session id a transcript belongs to (main: <sid>.jsonl, sub: <sid>/subagents/...).
 cs_repair_sid_of() {
   local r=${1#*/}
@@ -408,6 +419,14 @@ cs_repair() {
     cs_say repair.summary_dry "$total_changed" "$total_lines" "$total_bad" "$failed"
   else
     cs_say repair.summary "$total_changed" "$total_lines" "$total_bad" "$failed" "$bdir"
+  fi
+  if ((!dry && failed == 0)); then
+    # Sessions that setup had blocked until they were repaired are free again.
+    local rel2 sid2
+    for rel2 in "${todo[@]}"; do
+      sid2=$(cs_repair_sid_of "$rel2")
+      if [[ $(cs_tsv_field sessions status "$sid2" 2>/dev/null) == needs_repair ]]; then cs_tsv_delete sessions "$sid2"; fi
+    done
   fi
   ((failed == 0))
 }

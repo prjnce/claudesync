@@ -31,10 +31,10 @@ setup() { cs_test_setup; }
   [[ $output == *"unknown command: frobnicate"* ]]
 }
 
-@test "known but unimplemented command exits 1" {
-  run cli service
-  [ "$status" -eq 1 ]
-  [[ $output == *"not implemented"* ]]
+@test "an unknown subcommand is a usage error (exit 2)" {
+  run cli service nonsense
+  [ "$status" -eq 2 ]
+  [[ $output == *"Usage: claude-sync service"* ]]
 }
 
 @test "works when invoked through a relative path from another directory" {

@@ -31,47 +31,10 @@ cs_use() {
 }
 
 
-# doctor_line TAG KEY [ARGS...]: "  TAG   message" (tags stay untranslated).
-doctor_line() {
-  local tag=$1
-  shift
-  printf '  %-5s %s\n' "$tag" "$(cs_t "$@")"
-}
-
 cmd_doctor() {
-  cs_use platform claude
-  local problems=0 dir scan n dirs junk dups os=$CS_OS
-  ((CS_WSL)) && os+=' (WSL)'
-  cs_say doctor.title "$CS_VERSION"
-  doctor_line OK doctor.env "$BASH_VERSION" "$CS_AWK" "$os"
-  dir=$(cs_claude_dir)
-  if [[ -d $dir ]]; then
-    doctor_line OK doctor.claude_dir "$dir"
-  else
-    doctor_line FAIL doctor.claude_dir_missing "$dir"
-    return 1
-  fi
-  scan=$(cs_claude_scan)
-  n=$(printf '%s' "$scan" | grep -c . || true)
-  dirs=$(printf '%s\n' "$scan" | "$CS_AWK" -F'\t' 'NF { d[$1] = 1 } END { print length(d) + 0 }')
-  doctor_line OK doctor.sessions "$n" "$dirs"
-  doctor_line OK doctor.retention "$(cs_claude_retention_days)"
-  junk=$(cs_claude_junk_dirs)
-  if [[ -n $junk ]]; then
-    while IFS= read -r d; do doctor_line WARN doctor.junk_dir "$d"; done <<<"$junk"
-    problems=1
-  fi
-  dups=$(printf '%s\n' "$scan" | cs_claude_dup_ids /dev/stdin)
-  if [[ -n $dups ]]; then
-    doctor_line WARN doctor.dup_ids "$(printf '%s\n' "$dups" | grep -c .)"
-    problems=1
-  fi
-  printf '\n'
-  if ((problems)); then
-    cs_say doctor.problems
-    return 1
-  fi
-  cs_say doctor.ok
+  cs_use platform version manifest store claude transform projects drive root ui scheduler hooks doctor
+  cs_store_init
+  cs_doctor
 }
 
 cmd_login() {
@@ -101,7 +64,7 @@ cmd_login() {
 }
 
 cmd_setup() {
-  cs_use platform version store claude drive root ui setup
+  cs_use platform version manifest store claude transform projects drive root status engine bundle memory gc cmd_projects ui pending fork scheduler hooks repair doctor setup
   cs_setup "$@"
 }
 
@@ -235,6 +198,11 @@ main() {
       cs_claude_wrapper "$@"
       ;;
     uninstall)
+      cs_bootstrap
+      cs_use platform version store claude scheduler hooks ui uninstall
+      cs_uninstall "$@"
+      ;;
+    UNINSTALL_PLACEHOLDER)
       cs_bootstrap
       cs_die_t "$CS_EXIT_ERROR" cli.not_implemented "$cmd"
       ;;

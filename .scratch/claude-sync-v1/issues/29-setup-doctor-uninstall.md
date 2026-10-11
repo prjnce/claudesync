@@ -1,6 +1,6 @@
 # 29 — Setup hoàn chỉnh, doctor, config, uninstall
 
-Status: needs-triage
+Status: ready-for-human
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M6
@@ -21,7 +21,11 @@ Spec: SPEC §12.9 (retention), §14 (lần sync đầu), §16 bước 7–10, §
 
 ## Tiêu chí nghiệm thu
 
-- [ ] Chạy `setup` lần 2 trên máy đã cài: không đổi gì ngoài những gì người dùng chọn lại.
-- [ ] Người dùng từ chối nâng retention → setup vẫn hoàn tất, status báo session bị bỏ qua theo retention.
-- [ ] `uninstall --purge` rồi `setup` lại → máy nhận lại đúng vùng Drive cũ (hoặc tạo machine_id mới có cảnh báo).
-- [ ] Test: phát hiện layout lạ thì engine dừng với `ERROR: unsupported layout`, không ghi gì.
+- [x] Chạy `setup` lần 2 trên máy đã cài: không đổi gì ngoài những gì người dùng chọn lại.
+- [x] Người dùng từ chối nâng retention → setup vẫn hoàn tất, status báo session bị bỏ qua theo retention.
+- [x] `uninstall --purge` rồi `setup` lại → máy nhận lại đúng vùng Drive cũ (hoặc tạo machine_id mới có cảnh báo).
+- [x] Test: phát hiện layout lạ thì engine dừng với `ERROR: unsupported layout`, không ghi gì.
+
+## Comments
+
+- 2026-10-11: `setup` bước 7-10 (`repair`, `projects`, `retention`, `finish`) trong `lib/setup.sh`, cảnh báo secret một lần, `CS_SETUP_ONLY_STEPS` để chạy một phần; `lib/doctor.sh` (kiểm tra đầy đủ: client, token, root + nhiều root, service/timer, launcher chạy thử trên Windows, hook, retention thấp, ID trùng, thư mục rác, owner, layout lạ R1); `claude-sync uninstall [--purge] [--yes]` (`lib/uninstall.sh`: gỡ service + hook, purge chỉ xoá `~/.claude-sync`, giữ owner file nên setup lại nhận đúng machine_id và vùng Drive cũ); engine dừng với `ERROR: unsupported layout` (CLAUDE_CODE_HOVER_REST hoặc `*.compact.tmp.*`) trước khi ghi gì; sửa repair: dọn trạng thái `needs_repair` sau khi repair xong. Test: `test/setup2.bats` (6 ca). `config` đã làm ở #25. Còn lại cho người (#30): chạy setup thật trên máy thật, kiểm `service install` thật, giá trị tối thiểu/tối đa version Claude cho R1 (hiện chỉ kiểm HOVER_REST và `*.compact.tmp.*`).

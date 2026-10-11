@@ -197,6 +197,25 @@ cs_claude_settings_filter() {
   jq --arg k "$2" --argjson v "$3" '.[$k] = $v' "$1" | tr -d '\r'
 }
 
+# cs_claude_layout_check: rc 1 when Claude Code's on-disk layout is one this version of claude-sync does not know
+# (risk R1): a variant that is switched on by CLAUDE_CODE_HOVER_REST, or compaction temp files in projects/.
+# Prints the reason (a catalog key and argument) on stdout.
+cs_claude_layout_check() {
+  local p f
+  if [[ -n ${CLAUDE_CODE_HOVER_REST:-} ]]; then
+    printf 'doctor.layout_hover\n'
+    return 1
+  fi
+  p="$(cs_claude_dir)/projects"
+  [[ -d $p ]] || return 0
+  f=$(find "$p" -maxdepth 3 -name '*.compact.tmp.*' -print -quit 2>/dev/null)
+  if [[ -n $f ]]; then
+    printf 'doctor.layout_compact\t%s\n' "$f"
+    return 1
+  fi
+  return 0
+}
+
 # cs_claude_never_sync RELPATH: rc 0 if RELPATH (relative to the Claude config dir) must never be synced
 # (SPEC §4.3). Checked by tests; every uploader must call it.
 cs_claude_never_sync() {

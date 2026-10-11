@@ -1,13 +1,14 @@
 # shellcheck shell=bash
-# setup: the re-runnable wizard (SPEC §16). Steps 0-6 here (ticket #12); 7-10 come with #29.
-#   lang deps client proxy login root machine
+# setup: the re-runnable wizard (SPEC §16): lang deps client proxy login root machine (#12), repair projects
+#   retention finish (#29).
 # Each step can run alone: claude-sync setup --step <name>. Requires core, platform, version, store,
 # claude, drive (with auth), root, ui.
 
 [[ -n ${CS_SETUP_LOADED:-} ]] && return 0
 CS_SETUP_LOADED=1
 
-CS_SETUP_STEPS=(lang deps client proxy login root machine)
+CS_SETUP_STEPS=(lang deps client proxy login root machine repair projects retention finish)
+# CS_SETUP_ONLY_STEPS="lang deps ..." restricts the full run to those steps (tests, partial re-runs).
 
 cs_setup_step_lang() {
   cs_heading setup.h_lang
@@ -128,6 +129,12 @@ cs_setup_step_machine() {
   cs_heading setup.h_machine
   local name id rid
   name=$(cs_ask setup.ask_machine_name "$(cs_config_get machine_name "$(cs_default_machine_name)")")
+  if [[ -z $(cs_config_get machine_id "") && -s $(cs_owner_file) ]]; then
+    # ~/.claude-sync was removed (uninstall --purge) but this Claude config still says who manages it:
+    # take that identity back, and with it the old area on Drive.
+    cs_config_set machine_id "$(tr -d '\r\n' <"$(cs_owner_file)")"
+    cs_say setup.machine_reused
+  fi
   id=$(cs_machine_init "$name")
   if ! cs_owner_claim "$id"; then
     cs_die_t "$CS_EXIT_ERROR" setup.owner_conflict "$(cs_owner_file)" "$(tr -d '\r\n' <"$(cs_owner_file)")"
@@ -137,6 +144,72 @@ cs_setup_step_machine() {
     cs_machine_area_ensure "$rid" >/dev/null || return
   fi
   cs_say setup.machine_done "$name" "$id"
+}
+
+# Step 7: transcripts that Claude cannot load as written (SPEC §19). Declined repairs block those sessions.
+cs_setup_step_repair() {
+  cs_heading setup.h_repair
+  local needing n rel sid
+  needing=$(cs_repair_needing)
+  n=$(printf '%s' "$needing" | grep -c . || true)
+  if ((n == 0)); then
+    cs_say setup.repair_none
+    return 0
+  fi
+  cs_say setup.repair_found "$n"
+  if cs_confirm setup.ask_repair y; then
+    cs_repair --yes
+  else
+    while IFS= read -r rel; do
+      [[ -n $rel ]] || continue
+      sid=$(cs_repair_sid_of "$rel")
+      cs_tsv_upsert sessions "$sid" - "${rel%%/*}" 0 0 0 - - - needs_repair - "$(date +%s)"
+    done <<<"$needing"
+    cs_say setup.repair_blocked "$n"
+  fi
+}
+
+# Step 8: which folders are synced, and the projects other machines already sync (SPEC §6.1).
+cs_setup_step_projects() {
+  cs_heading setup.h_projects
+  cs_projects_select
+  if declare -F cs_eng_fetch_remotes >/dev/null && cs_eng_load 2>/dev/null; then
+    cs_eng_fetch_remotes
+    CS_RUN_REMOTE_FAIL=0 cs_pend_detect || true
+    cs_pend_review
+  fi
+}
+
+# Step 9: Claude deletes transcripts older than cleanupPeriodDays; ask before raising it.
+cs_setup_step_retention() {
+  cs_heading setup.h_retention
+  local days
+  days=$(cs_claude_retention_days)
+  if [[ $days == 0 ]] || ((days >= 3650)); then
+    cs_say setup.retention_ok "$days"
+    return 0
+  fi
+  if cs_confirm setup.ask_retention y "$days"; then
+    cs_claude_settings_set cleanupPeriodDays 3650
+    cs_say setup.retention_set
+  else
+    cs_say setup.retention_kept "$days"
+  fi
+}
+
+# Step 10: interval, service, hooks, doctor, and the first sync right here with progress (F11).
+cs_setup_step_finish() {
+  cs_heading setup.h_finish
+  local iv
+  iv=$(cs_ask setup.ask_interval "$(cs_config_get interval 5)")
+  [[ $iv == 5 || $iv == 10 ]] || iv=5
+  cs_config_set interval "$iv"
+  cs_sched_install || cs_say setup.service_failed >&2
+  cs_hooks_install
+  cs_doctor || true
+  cs_say setup.first_sync
+  CS_VERBOSE=1 CS_SOFT_DEADLINE=86400 cs_run || cs_say setup.first_sync_failed >&2
+  cs_say setup.alias_hint
 }
 
 # cs_setup [--step NAME]: run every step (or one).
@@ -157,7 +230,10 @@ cs_setup() {
     "cs_setup_step_$only"
     return
   fi
-  for s in "${CS_SETUP_STEPS[@]}"; do
+  local -a steps=("${CS_SETUP_STEPS[@]}")
+  [[ -z ${CS_SETUP_ONLY_STEPS:-} ]] || read -r -a steps <<<"$CS_SETUP_ONLY_STEPS"
+  cs_say setup.secrets_warning
+  for s in "${steps[@]}"; do
     "cs_setup_step_$s" || cs_die_t "$CS_EXIT_ERROR" setup.step_failed "$s"
   done
   printf '\n'

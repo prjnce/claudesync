@@ -723,6 +723,14 @@ cs_run() {
 cs_run_cycle() {
   local dry=${1:-0}
   cs_eng_load || return
+  local layout
+  if ! layout=$(cs_claude_layout_check); then
+    # A Claude layout we do not know (R1): write nothing, anywhere.
+    cs_say engine.unsupported_layout "$(cs_t "${layout%%$'\t'*}" "${layout#*$'\t'}")" >&2
+    cs_log error "run: unsupported Claude layout (${layout%%$'\t'*})"
+    ((dry)) || cs_status_patch '.state = "ERROR"'
+    return "$CS_EXIT_ERROR"
+  fi
   cs_log_rotate
   CS_RUN_DRV_RC=0 CS_RUN_FAILS=0 CS_RUN_REMOTE_FAIL=0
   local j

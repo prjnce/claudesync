@@ -5,6 +5,7 @@
 load test_helper
 
 setup() {
+  export CS_SETUP_ONLY_STEPS='lang deps client proxy login root machine' # steps 7-10 have their own tests (setup2.bats)
   cs_test_setup
   cs_load platform version store claude drive root ui setup
   T=$BATS_TEST_TMPDIR
