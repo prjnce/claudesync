@@ -200,3 +200,6 @@ cs_service() {
     *) cs_die_t "$CS_EXIT_USAGE" service.usage ;;
   esac
 }
+
+# shellcheck source=lib/sched_win.sh
+source "${BASH_SOURCE[0]%/*}/sched_win.sh"

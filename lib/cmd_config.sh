@@ -13,6 +13,7 @@ cs_config_spec() { # KEY -> "regex<TAB>default" (rc 1 for an unknown key)
     lang) printf '^(en|vi)$\ten\n' ;;
     mode) printf '^(all|selected)$\tall\n' ;;
     scan_dirs) printf '^.*$\t\n' ;;
+    wsl_distro | wsl_user) printf '^[A-Za-z0-9._-]*$\t\n' ;;
     machine_name) printf '^[^[:cntrl:]]+$\t\n' ;;
     *) return 1 ;;
   esac
@@ -24,7 +25,7 @@ cmd_config() {
   case $sub in
     get)
       if (($# == 0)); then
-        for k in interval guard throttle_live_min lang mode scan_dirs machine_name; do
+        for k in interval guard throttle_live_min lang mode scan_dirs machine_name wsl_distro wsl_user; do
           IFS=$'\t' read -r _ def <<<"$(cs_config_spec "$k")"
           printf '%s=%s\n' "$k" "$(cs_config_get "$k" "$def")"
         done

@@ -1,6 +1,6 @@
 # 26 — Lập lịch Windows: launcher, task, WSL, kick
 
-Status: needs-triage
+Status: ready-for-human
 Đề xuất: ready-for-agent (kiểm thật trên máy Windows cần người dùng)
 Type: task
 Mốc: M5
@@ -21,11 +21,13 @@ Spec: SPEC §17.2, §17.3, §6 (`realRoot` qua launcher); mẫu XML `docs/resear
 
 ## Tiêu chí nghiệm thu
 
-- [ ] Test: XML sinh ra có BOM `FF FE`, là UTF-16LE hợp lệ, đổi interval đổi `PT5M`→`PT10M`.
+- [x] Test: XML sinh ra có BOM `FF FE`, là UTF-16LE hợp lệ, đổi interval đổi `PT5M`→`PT10M`.
 - [ ] Kiểm thật: chạy ẩn hoàn toàn, Last Run Result = exit code của engine, `IgnoreNew` ngăn chạy chồng, kill task dọn cả cây tiến trình.
 - [ ] Kiểm thật: action WSL chạy được engine trong distro.
-- [ ] `service uninstall` gỡ task, giữ dữ liệu.
+- [x] `service uninstall` gỡ task, giữ dữ liệu.
 
 ## Comments
 
 **2026-10-05 — Claude:** Tuỳ chọn: gắn `docs/logo.png` làm icon cho `launcher.exe` (`csc /win32icon:` cần file `.ico`; chuyển PNG → ICO bằng PowerShell `System.Drawing` lúc cài). Giá trị thấp vì launcher chạy ẩn (chỉ thấy trong Task Manager); làm nếu rẻ.
+
+- 2026-10-11: `launcher/launcher.cs` + `lib/sched_win.sh` (task XML UTF-16LE BOM, build launcher bằng csc, fallback run-hidden.vbs, action WSL qua config `wsl_distro`/`wsl_user`, kick, shim `~/bin/claude-sync`) + `test/sched_win.bats` (7 ca, launcher thật chạy trên Git Bash: exit code 7, chờ con, `realpath`, 127 khi không có chương trình). Job Object kill-on-close đã thử tay (kill launcher thì cây con cũng chết). Chưa đăng ký task thật (sẽ chạy `run` thật lên Drive "Claude Sync"; cần người dùng đồng ý). Còn lại cho người: Last Run Result = exit code của engine, IgnoreNew ngăn chạy chồng, action WSL trong distro. Lưu ý MSYS: đối số `/c`, `/target` bị đổi thành đường dẫn khi gọi exe native — dùng `nat`/`MSYS2_ARG_CONV_EXCL='*'` hoặc tuỳ chọn dạng `-x`.
