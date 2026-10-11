@@ -14,6 +14,8 @@
 CS_ENGINE_LOADED=1
 
 CS_SOFT_DEADLINE=${CS_SOFT_DEADLINE:-420} # SPEC §14: no new work after 7 minutes
+CS_PULL_ONLY=${CS_PULL_ONLY:-0}           # --pull-only: only installs, for one project (the wrapper, SPEC §17.4)
+CS_ONLY_PROJECT=${CS_ONLY_PROJECT:-}
 
 # --- context ---------------------------------------------------------------------------------------------
 
@@ -397,6 +399,7 @@ cs_eng_install() {
   cs_eng_my_manifest_save "$(cs_manifest_put_session "$(cs_eng_my_manifest)" "$sid" "$entry")"
   cs_journal_end "$jr"
   cs_log info "run: installed $sid ($(( n - start )) new segment(s))"
+  if ((CS_PULL_ONLY)); then printf 'claude-sync: installed %s\n' "$sid" >&2; fi
   CS_RUN_INSTALLED=$((CS_RUN_INSTALLED + 1))
 }
 
@@ -675,11 +678,31 @@ cs_run_finish() {
   return "$(cs_status_exit "$1")"
 }
 
-# cs_run [--dry-run]: one cycle. Prints a one-line summary.
+# cs_run [--dry-run] [--pull-only --project X]: one cycle. Prints a one-line summary. --pull-only installs what
+# other machines have for one project (X: a folder, an alias or an id) and publishes nothing, within 60 s.
 cs_run() {
-  local dry=0 rc=0
-  [[ ${1:-} == --dry-run ]] && dry=1
+  local dry=0 rc=0 proj=''
+  CS_PULL_ONLY=0 CS_ONLY_PROJECT=''
+  while (($#)); do
+    case $1 in
+      --dry-run) dry=1 ;;
+      --pull-only) CS_PULL_ONLY=1 ;;
+      --project)
+        shift
+        proj=${1:-}
+        ;;
+      --project=*) proj=${1#--project=} ;;
+    esac
+    shift
+  done
   mkdir -p -- "$CS_HOME"
+  if [[ -n $proj ]]; then
+    CS_ONLY_PROJECT=$(cs_project_of_cwd "$proj" 2>/dev/null) || CS_ONLY_PROJECT=$(cs_project_find "$proj" 2>/dev/null) || {
+      cs_say engine.unknown_project "$proj" >&2
+      return "$CS_EXIT_USAGE"
+    }
+  fi
+  ((CS_PULL_ONLY)) && CS_SOFT_DEADLINE=${CS_PULL_DEADLINE:-60}
   exec 9>>"$CS_HOME/sync.lock"
   cs_lock_fd 9 0 || {
     cs_say engine.busy
@@ -720,7 +743,7 @@ cs_run_cycle() {
     return "$CS_EXIT_ERROR"
   }
   cs_eng_fetch_remotes
-  ((dry)) || cs_pend_detect || true
+  ((dry || CS_PULL_ONLY)) || cs_pend_detect || true
   cs_fork_known_from_manifests
   local table
   table=$(cs_eng_candidates_table)
@@ -762,6 +785,7 @@ cs_run_cycle() {
       cs_eng_row_set "$sid" "${pid:--}" "$dir" 0 0 0 - - "$([[ -n $pid ]] && echo new || echo unmapped)"
     fi
     [[ -n $pid && $pid != - ]] || continue
+    if ((CS_PULL_ONLY)) && [[ $pid != "$CS_ONLY_PROJECT" ]]; then continue; fi
     cands=$(printf '%s\n' "$table" | S=$sid "$CS_AWK" -F'\t' -v OFS='\t' '$2 == ENVIRON["S"] { print $1, $3 }')
     local changed=0
     [[ $size != "$lsize" || $mt != "$lmt" ]] && changed=1
@@ -856,6 +880,7 @@ cs_run_cycle() {
     [[ -n $sid && -z ${seen[$sid]:-} ]] || continue
     seen[$sid]=1
     cs_tsv_rows projects | cut -f1,6 | grep -qx "$proj"$'\t'1 || continue # not mapped here (#31)
+    if ((CS_PULL_ONLY)) && [[ $proj != "$CS_ONLY_PROJECT" ]]; then continue; fi
     cutoff=$(cs_eng_cutoff "$proj")
     dir='' base=''
     if row=$(cs_tsv_get sessions "$sid"); then
@@ -899,6 +924,7 @@ cs_run_cycle() {
 
   # 3. Publish.
   local item rw
+  if ((CS_PULL_ONLY)); then to_publish=(); fi
   for item in "${to_publish[@]}"; do
     IFS=$'\t' read -r sid f pid dir ilen rw <<<"$item"
     ((dry)) && {
@@ -913,7 +939,15 @@ cs_run_cycle() {
       cs_log warn "run: publishing $sid failed; retried next cycle"
     fi
   done
-  if ((!dry)); then
+  if ((!dry && CS_PULL_ONLY)); then
+    # Pull only: the bundles of this project's sessions; nothing is uploaded.
+    local pdir
+    while IFS=$'\t' read -r sid pdir; do
+      cs_eng_time_left || break
+      cs_bundle_remote_install "$sid" "$pdir" || true
+    done < <(cs_tsv_rows sessions | P=$CS_ONLY_PROJECT "$CS_AWK" -F'\t' -v OFS='\t' '$2 == ENVIRON["P"] && $10 == "synced" { print $1, $3 }')
+  fi
+  if ((!dry && !CS_PULL_ONLY)); then
     # 4. Bundles and subagent transcripts of every synced session.
     local bdir
     while IFS=$'\t' read -r sid bdir; do
@@ -944,7 +978,7 @@ cs_run_cycle() {
   elif cs_tsv_rows sessions | "$CS_AWK" -F'\t' '$10 == "needs_repair" { f = 1 } END { exit !f }'; then
     state=NEEDS_REPAIR
   fi
-  cs_run_finish "$state" "$((CS_RUN_FAILS == 0))" "$((CS_RUN_FAILS == 0))"
+  cs_run_finish "$state" "$((CS_RUN_FAILS == 0))" "$((CS_RUN_FAILS == 0 && !CS_PULL_ONLY))"
 }
 
 # cs_restore SID: install a session from Drive that retention (or the user) removed here; its mtime is
