@@ -87,7 +87,7 @@ forks_of() { echo $(($(ls "$SIM/$1"/claude/projects/*/ | grep -c '^[0-9a-f]\{8\}
   [ "$(grep -c uc "$C_FILE")" -eq 0 ]
   fork=$(sim_exec C 'cs_fork_sid "$1" uc' "$SID" | tr -d '\r')
   [ -n "$(sim_find C "$fork")" ]
-  [ "$(ls "$CCC"/projects/*/ | grep -c "^$fork")" -eq 1 ]
+  [ "$(ls "$CCC"/projects/*/ | grep -c "^$fork.jsonl$")" -eq 1 ]
   [ "$(forks_of C)" -eq 1 ]
 }
 
@@ -113,7 +113,7 @@ forks_of() { echo $(($(ls "$SIM/$1"/claude/projects/*/ | grep -c '^[0-9a-f]\{8\}
   [ -f "$d/custom-title.json" ]
   grep -q 'plan-one-c' "$(sim_find C "$fork")"
   [ -n "$(ls "$CCC"/plans/plan-one-c*.md)" ]
-  sim_exec C 'cs_fork_materialize "$1" "$2" "$3" "$4" p1 "{}"' "$SID" "$fork" "$C_FILE" "$CSLUG"
+  sim_exec C 'CS_PDIR="$(cs_claude_dir)/projects"; cs_fork_materialize "$1" "$2" "$3" "$4" p1 "{}"' "$SID" "$fork" "$C_FILE" "$CSLUG"
   [ "$(forks_of C)" -eq 1 ]
 }
 
