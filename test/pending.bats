@@ -143,3 +143,15 @@ sj() { jq -c "$2" "$SIM/$1/home/.claude-sync/state/status.json" | tr -d '\r'; }
   n2=$(wc -l <"$SIM/B/home/.claude-sync/state/scan_cache.tsv")
   ((n2 > n1))
 }
+
+@test "projects map <alias> <folder> (the command the hook suggests) keeps the project_id of the waiting project and clears it" {
+  sim_write A D--Projects-TransFlow "$SID" "$(aline 1)"
+  sim_run A >/dev/null
+  sim_run B >/dev/null
+  [ "$(sj B '.waiting_map | length')" = 1 ]
+  sim_cli B projects map TransFlow "$SIM/B/projects/TransFlowY" >/dev/null
+  [ "$(sim_exec B 'cs_tsv_rows projects | cut -f1' | tr -d '\r')" = p1 ]
+  [ -z "$(pend B | grep '^remote')" ]
+  run sim_run B
+  [[ $output == *'1 installed'* ]]
+}

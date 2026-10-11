@@ -219,7 +219,17 @@ main() {
       cs_use platform store scheduler ui cmd_config
       cmd_config "$@"
       ;;
-    hooks | claude | uninstall)
+    hooks)
+      cs_bootstrap
+      cs_use platform version store claude transform projects status scheduler ui hooks
+      cmd_hooks "$@"
+      ;;
+    hook)
+      cs_bootstrap
+      cs_use platform version store claude transform projects status scheduler ui hooks
+      cs_hook "$@"
+      ;;
+    claude | uninstall)
       cs_bootstrap
       cs_die_t "$CS_EXIT_ERROR" cli.not_implemented "$cmd"
       ;;

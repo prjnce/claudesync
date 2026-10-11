@@ -102,8 +102,17 @@ cmd_projects() {
         return 0
       fi
       (($# == 2)) || cs_die_t "$CS_EXIT_USAGE" projects.usage_map
-      local id root state
-      IFS=$'\t' read -r id root state < <(cs_project_map "$1" "$2")
+      local id root state pend=''
+      # A project that other machines sync and that waits here keeps its project_id (SPEC §6.1).
+      if ! cs_project_find "$1" >/dev/null 2>&1; then
+        pend=$(cs_tsv_rows pending_map | A=$1 "$CS_AWK" -F'\t' '$1 == "remote" && (tolower($3) == tolower(ENVIRON["A"]) || $2 == ENVIRON["A"]) { print $2; exit }')
+      fi
+      if [[ -n $pend ]]; then
+        IFS=$'\t' read -r id root state < <(cs_project_map "$1" "$2" "$pend")
+        [[ -n $id ]] && cs_tsv_delete pending_map remote "$pend"
+      else
+        IFS=$'\t' read -r id root state < <(cs_project_map "$1" "$2")
+      fi
       [[ -n $id ]] || exit 1
       cs_say projects.mapped "$(cs_tsv_field projects alias "$id" "$root")" "$id" "$root"
       ;;

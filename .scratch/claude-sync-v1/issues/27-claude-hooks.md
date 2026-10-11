@@ -1,6 +1,6 @@
 # 27 — Hook Claude Code
 
-Status: needs-triage
+Status: ready-for-human
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M5
@@ -17,8 +17,12 @@ Spec: SPEC §18, §1.4 A3; kết quả spike #03 quyết định field hiển th
 
 ## Tiêu chí nghiệm thu
 
-- [ ] Test: install chạy 2 lần không nhân đôi entry; uninstall chỉ gỡ entry của claude-sync, giữ hook khác của người dùng; settings.json không có CR.
-- [ ] Test: `session-start` xong < 2 s trên Git Bash với DB 500 session.
+- [x] Test: install chạy 2 lần không nhân đôi entry; uninstall chỉ gỡ entry của claude-sync, giữ hook khác của người dùng; settings.json không có CR.
+- [x] Test: `session-start` xong < 2 s trên Git Bash với DB 500 session.
 - [ ] Mở session khi chưa sync bù → Claude hiện cảnh báo rõ (**A3**, **F5**; kiểm thật ở #30).
 - [ ] Mở Claude trong `~/projects/TransFlowX` khi `TransFlow` đang chờ map → thông báo gợi ý đúng lệnh map với path hiện tại; mở lần 2 trong ngày thì không nhắc lại.
 - [ ] Gõ vào tab VS Code cũ của session đã được viết tiếp ở máy khác → bị chặn với thông báo đúng.
+
+## Comments
+
+- 2026-10-11: `lib/hooks.sh` + `test/hooks.bats` (7 ca): install/uninstall theo dấu `#claude-sync` (không nhân đôi, giữ hook của người dùng, không CR, backup), `hook session-start` (đầu ra JSON `{"systemMessage": ...}` — field hiển thị CHƯA được kiểm chứng ở #03, cần thử trên Claude thật), `hook prompt-guard` (block → exit 2 + stderr; warn → systemMessage; off), SessionEnd `nohup claude-sync kick &`. `session-start` đọc `status.json` + `pending_map.tsv`, mỗi mục chờ map tối đa 1 lần/ngày (`state/hook-notified`), < 2 s với DB 500 session (Git Bash). `claude-sync projects map <alias> <folder>` giờ giữ `project_id` của project đang chờ (lệnh mà hook gợi ý). Còn lại cho người (#03, #30): cảnh báo hiển thị thật khi mở session, chặn gõ vào tab VS Code cũ.
