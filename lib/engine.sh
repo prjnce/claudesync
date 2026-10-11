@@ -677,13 +677,28 @@ cs_run_finish() {
 
 # cs_run [--dry-run]: one cycle. Prints a one-line summary.
 cs_run() {
-  local dry=0
+  local dry=0 rc=0
   [[ ${1:-} == --dry-run ]] && dry=1
+  mkdir -p -- "$CS_HOME"
   exec 9>>"$CS_HOME/sync.lock"
   cs_lock_fd 9 0 || {
     cs_say engine.busy
     return "$CS_EXIT_BUSY"
   }
+  : >"$CS_HOME/run.stamp"
+  cs_run_cycle "$dry" || rc=$?
+  # A kick during the run touched `pending`: one more cycle, so that no kick is lost (SPEC §17.3).
+  if ((!dry && rc != CS_EXIT_BUSY)) && [[ $CS_HOME/pending -nt $CS_HOME/run.stamp ]]; then
+    cs_log info "run: kicked while running; one more cycle"
+    : >"$CS_HOME/run.stamp"
+    cs_run_cycle 0 || rc=$?
+  fi
+  return "$rc"
+}
+
+# cs_run_cycle DRY: one cycle (the lock is held by cs_run).
+cs_run_cycle() {
+  local dry=${1:-0}
   cs_eng_load || return
   cs_log_rotate
   CS_RUN_DRV_RC=0 CS_RUN_FAILS=0 CS_RUN_REMOTE_FAIL=0

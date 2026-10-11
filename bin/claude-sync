@@ -209,7 +209,17 @@ main() {
       cs_use platform version manifest store claude transform projects drive root status engine bundle memory gc cmd_projects ui pending fork
       cs_conflicts "$@"
       ;;
-    service | hooks | config | claude | uninstall | kick)
+    service | kick)
+      cs_bootstrap
+      cs_use platform store scheduler ui
+      if [[ $cmd == kick ]]; then cs_kick; else cs_service "$@"; fi
+      ;;
+    config)
+      cs_bootstrap
+      cs_use platform store scheduler ui cmd_config
+      cmd_config "$@"
+      ;;
+    hooks | claude | uninstall)
       cs_bootstrap
       cs_die_t "$CS_EXIT_ERROR" cli.not_implemented "$cmd"
       ;;

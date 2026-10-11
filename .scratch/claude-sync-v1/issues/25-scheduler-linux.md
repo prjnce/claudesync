@@ -1,6 +1,6 @@
 # 25 — Lập lịch Linux: systemd, linger, kick
 
-Status: needs-triage
+Status: ready-for-human
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M5
@@ -19,6 +19,10 @@ Spec: SPEC §17.1, §17.3, §2 (Khởi động)
 
 ## Tiêu chí nghiệm thu
 
-- [ ] Test (unit): unit file sinh ra giống mẫu; đổi interval sửa đúng dòng.
-- [ ] `kick` trả về ngay (< 1 s) kể cả khi service đang chạy.
+- [x] Test (unit): unit file sinh ra giống mẫu; đổi interval sửa đúng dòng.
+- [x] `kick` trả về ngay (< 1 s) kể cả khi service đang chạy.
 - [ ] Kiểm thật trên Ubuntu: tắt máy, bật lại chưa đăng nhập → timer chạy bù (`Persistent`); `uninstall` gỡ sạch.
+
+## Comments
+
+- 2026-10-11: code + 8 test (`test/scheduler.bats`, systemctl/loginctl giả): unit file đúng §17.1, shim `~/.local/bin/claude-sync`, `config set interval` sửa OnCalendar + reload, `kick` (touch `pending`, `start --no-block`, không chờ; không có systemd thì chạy nền một lần), linger với hỏi sudo khi polkit từ chối, không systemd → không cài gì, cờ test `CS_SCHED_KIND`. Engine chạy thêm một vòng khi `pending` mới hơn lúc vòng hiện tại bắt đầu (`cs_run` / `cs_run_cycle`). Còn lại cho người: kiểm thật trên Ubuntu (reboot chưa đăng nhập → Persistent chạy bù, `uninstall` gỡ sạch) và chốt Q5 ở #04. `claude-sync config get|set` mới có các khoá interval, guard, throttle_live_min, lang, mode, scan_dirs, machine_name.
