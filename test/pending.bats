@@ -64,7 +64,7 @@ sj() { jq -c "$2" "$SIM/$1/home/.claude-sync/state/status.json" | tr -d '\r'; }
   echo "$c"
   [[ $c == *"tf-server|same_git_remote|30;"* ]]
   [[ $c == *"TransFlowX|name|43"* ]]
-  gz=$(grep -l '"csKind":"manifest"' "$SIM"/drive/objects/*/meta.json | head -n 1)
+  gz=$(grep -l '"csMachine":"A-0000-4000-8000-000000000000"' "$SIM"/drive/objects/*/meta.json | xargs grep -l '"csKind":"manifest"' | head -n 1)
   m=$(gzip -dc "$(dirname "$gz")/content")
   [[ $m == *"$KEYS"* ]]
   [[ $m != *github* && $m != *SECRET* ]]

@@ -214,15 +214,19 @@ bline() { printf '{"type":"user","cwd":"%s%s","n":%s,"t":"xin chào %s"}' "$BROO
   [ "$(sim_canon A "$SIM/A/claude/projects/$ASLUG/$SID.jsonl")" = "$(sim_canon B "$(sim_find B "$SID")")" ]
 }
 
-@test "initialisation: unrelated content under the same id is neither installed nor published" {
+@test "initialisation: unrelated content under the same id is resolved as a fork (#20): one version keeps the id, the other becomes its own session" {
   sim_write A "$ASLUG" "$SID" "$(aline 1)" "$(aline 2)"
   sim_run A >/dev/null
   sim_write B "$BSLUG" "$SID" "$(bline 7)" "$(bline 8)"
-  before=$(cat "$(sim_find B "$SID")")
   run sim_run B
-  [[ $output == *'0 installed, 0 published'* ]]
-  [ "$(cat "$(sim_find B "$SID")")" = "$before" ]
-  [[ $(sim_exec B 'cs_tsv_get sessions "$1"' "$SID") == *conflict* ]]
+  [[ $output == *'1 installed'* ]]
+  # no timestamps: the lower machine id (A) wins, so B keeps A's content under the id ...
+  [ "$(sim_canon B "$(sim_find B "$SID")")" = "$(sim_canon A "$SIM/A/claude/projects/$ASLUG/$SID.jsonl")" ]
+  # ... and its own lines live on in a separate session
+  other=$(ls "$SIM/B/claude/projects/$BSLUG" | grep '[.]jsonl$' | grep -v "^$SID")
+  [ -n "$other" ]
+  grep -q '"n":7' "$SIM/B/claude/projects/$BSLUG/$other"
+  [ ! "$(sim_exec B 'cs_tsv_field sessions status "$1"' "$SID")" = conflict ]
 }
 
 # --- ticket #18 slice 2: rewrite and the decision table (SPEC §12.3, §12.6) -------------------------------
@@ -276,7 +280,7 @@ uline() { printf '{"type":"%s","uuid":"u-%s","cwd":"D:\\\\Projects\\\\X","n":%s}
   [ "$(cat "$fb")" = "$before" ]
 }
 
-@test "both machines changed the session: nothing is overwritten and the session is marked conflict (forks: #20)" {
+@test "both machines changed the session: no line is lost; the losing branch becomes a separate session (#20)" {
   sim_write A "$ASLUG" "$SID" "$(uline 1)"
   sim_run A >/dev/null
   sim_run B >/dev/null
@@ -285,9 +289,10 @@ uline() { printf '{"type":"%s","uuid":"u-%s","cwd":"D:\\\\Projects\\\\X","n":%s}
   printf '{"type":"user","uuid":"u-b","cwd":"%s"}\n' "$BROOT" >>"$fb"
   sim_run A >/dev/null
   run sim_run B
-  [[ $output == *'0 installed, 0 published'* ]]
-  [[ $(sim_exec B 'cs_tsv_get sessions "$1"' "$SID") == *conflict* ]]
-  [ "$(wc -l <"$fb")" -eq 2 ]
+  [[ $output == *'1 installed'* ]]
+  [ "$(sim_canon B "$fb")" = "$(sim_canon A "$SIM/A/claude/projects/$ASLUG/$SID.jsonl")" ]
+  other=$(ls "$SIM/B/claude/projects/$BSLUG" | grep '[.]jsonl$' | grep -v "^$SID")
+  grep -q 'u-b' "$SIM/B/claude/projects/$BSLUG/$other"
 }
 
 # --- ticket #18 slice 3: retention and restore (SPEC §12.9) -----------------------------------------------

@@ -54,7 +54,8 @@ cs_status_exit() {
 cs_status_finish() {
   local now conf n=0
   TZ=UTC printf -v now '%(%Y-%m-%dT%H:%M:%SZ)T' -1
-  conf=$(cs_tsv_rows sessions | "$CS_AWK" -F'\t' '$10 == "conflict" { print $1 }' | cs_jq -Rsc 'split("\n") | map(select(length > 0))')
+  # sessions that were forked (forks.tsv) or are still in conflict
+  conf=$({ cs_tsv_rows sessions | "$CS_AWK" -F'\t' '$10 == "conflict" { print $1 }'; cs_tsv_rows forks | cut -f1; } | cs_jq -Rsc 'split("\n") | map(select(length > 0)) | unique')
   [[ -f $CS_HOME/state/retention_skipped ]] && n=$(grep -c . "$CS_HOME/state/retention_skipped" || true)
   cs_status_patch '.state = $st | .last_run = $t | .conflicts = $c | .retention_skipped = $n
     | (if $pull == "1" then .last_ok_pull = $t else . end) | (if $push == "1" then .last_ok_push = $t else . end)

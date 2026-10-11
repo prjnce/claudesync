@@ -98,7 +98,7 @@ state_of() { jq -r .state "$SIM/$1/home/.claude-sync/state/status.json" | tr -d 
   [ "$(wc -l <"$(sim_find B "$SID")")" -eq 2 ]
 }
 
-@test "conflicts and the retention count appear in status.json" {
+@test "a forked session appears in status.json conflicts" {
   sim_write A "$ASLUG" "$SID" "$(uline 1)"
   sim_run A >/dev/null
   sim_write B "$BSLUG" "$SID" '{"type":"user","uuid":"u-x","cwd":"'"$BROOT"'","t":"other"}'
