@@ -160,15 +160,38 @@ cs_local_launch_cwds() {
   cs_local_launch_cwds_scan
 }
 
-# cs_local_launch_cwds_scan: the uncached scan (one jq per transcript).
+# cs_local_launch_cwds_scan: "launch cwd<TAB>sessions<TAB>bytes". Reading a launch cwd means reading the transcript, so the
+# answer per transcript is remembered in state/launch_cache.tsv (sid, size, mtime, cwd) and recomputed only for
+# transcripts whose size or mtime changed (R2: a 58 MB transcript must not be read again every cycle).
 cs_local_launch_cwds_scan() {
-  local dir slug sid size mt cwd
+  local dir slug sid size mt cwd cache="" tmp key csize cmt ccwd
+  local -A c_size=() c_mt=() c_cwd=()
   dir="$(cs_claude_dir)/projects"
+  if [[ -n ${CS_HOME:-} && -d $CS_HOME/state ]]; then
+    cache="$CS_HOME/state/launch_cache.tsv"
+    if [[ -f $cache ]]; then
+      while IFS=$'\t' read -r key csize cmt ccwd; do
+        [[ -n $key ]] || continue
+        c_size[$key]=$csize c_mt[$key]=$cmt c_cwd[$key]=$ccwd
+      done <"$cache"
+    fi
+  fi
+  tmp=$(mktemp "${TMPDIR:-/tmp}/cs-launch.XXXXXX")
   while IFS=$'\t' read -r slug sid size mt; do
     [[ -n $sid && $slug =~ ^[A-Za-z0-9_-]+$ ]] || continue
-    cwd=$(cs_launch_cwd "$dir/$slug/$sid.jsonl") || continue
-    printf '%s\t%s\n' "$cwd" "$size"
-  done < <(cs_claude_scan) | "$CS_AWK" -F'\t' -v OFS='\t' '{ n[$1]++; b[$1] += $2 } END { for (c in n) print c, n[c], b[c] }' | sort
+    key="$slug/$sid"
+    if [[ ${c_size[$key]:-} == "$size" && ${c_mt[$key]:-} == "$mt" && -n ${c_cwd[$key]:-} ]]; then
+      cwd=${c_cwd[$key]}
+    else
+      cwd=$(cs_launch_cwd "$dir/$slug/$sid.jsonl") || continue
+    fi
+    printf '%s\t%s\t%s\t%s\n' "$key" "$size" "$mt" "$cwd" >>"$tmp"
+  done < <(cs_claude_scan)
+  if [[ -n $cache ]]; then
+    cp -- "$tmp" "$cache.tmp.$$" && mv -f -- "$cache.tmp.$$" "$cache"
+  fi
+  "$CS_AWK" -F'\t' -v OFS='\t' '{ n[$4]++; b[$4] += $2 } END { for (c in n) print c, n[c], b[c] }' "$tmp" | sort
+  rm -f -- "$tmp"
 }
 
 # cs_root_spelling ROOT: the spelling of ROOT that local transcripts use (case-insensitive match on

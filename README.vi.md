@@ -88,36 +88,44 @@ rồi chép cùng file JSON sang mọi máy.
 ## Bắt đầu nhanh
 
 ```bash
-# 1. Ngôn ngữ, OAuth client, proxy, đăng nhập Google, folder gốc, tên máy
+# 1. Toàn bộ wizard: ngôn ngữ, OAuth client, proxy, đăng nhập Google, folder gốc, tên máy,
+#    kiểm tra transcript, chọn project, retention, service, hook và lần sync đầu
 bash bin/claude-sync setup
 
-# 2. Xem thư mục nào có session Claude và chọn thứ cần sync
-bash bin/claude-sync projects list
-bash bin/claude-sync projects select        # hoặc: projects map <tên> <thư mục>
+# 2. Tuỳ chọn: bắt kịp trước mỗi lần mở Claude (thêm vào profile shell)
+alias claude='claude-sync claude'
 
-# 3. Kiểm tra dữ liệu Claude local; sửa dữ liệu cũ nếu doctor báo lỗi
-bash bin/claude-sync doctor
-bash bin/claude-sync repair --dry-run       # chỉ đọc, chỉ báo cáo
-bash bin/claude-sync repair                 # hỏi trước khi sửa; backup trước
+# 3. Dùng hằng ngày
+claude-sync status          # trạng thái, lần sync cuối, session tụt hậu, xung đột, project chờ thư mục
+claude-sync doctor          # cài đặt đang có vấn đề gì
 ```
 
-Chạy `setup` trên mọi máy với cùng file JSON OAuth client. Máy đầu tiên tạo folder `Claude Sync`; các
-máy sau tự tìm thấy nó.
+Chạy `setup` trên mọi máy với cùng file JSON OAuth client. Máy đầu tiên tạo folder `Claude Sync`, các máy
+khác tự tìm thấy. Project mà máy khác đang sync sẽ chờ cho đến khi bạn chọn thư mục tương ứng ở máy này
+(`claude-sync projects map`); công cụ không bao giờ tự đoán để map.
 
 ## Các lệnh
 
-| Lệnh | | Chức năng |
-|---|---|---|
-| `setup [--step TÊN]` | ✅ bước 0–6 | Trình thiết lập: ngôn ngữ, công cụ, OAuth client, proxy, đăng nhập, folder gốc, tên máy. Chạy lại được. |
-| `login [--client FILE]` / `logout` | ✅ | Đăng nhập Google Drive / thu hồi token. |
-| `folder [show]` | ✅ | Tài khoản, link folder gốc và các máy đã tham gia. |
-| `projects list\|select\|map\|unmap\|mode\|exclude\|include\|dirs` | ✅ | Map thư mục local thành project; chọn thứ được sync. |
-| `doctor` | ✅ cơ bản | Công cụ, thư mục config của Claude, số session, thư mục rác, ID trùng, retention. |
-| `repair [--dry-run] [--yes] [--project X]` | ✅ | Sửa transcript cũ (CRLF, JSON bị ghi lại có dấu cách, path WSL/Windows, thư mục backup lạc chỗ). |
-| `run` / `sync [--dry-run]` | 🚧 | Một chu kỳ đồng bộ. Hiện chỉ cho session chỉ nối thêm; xem Trạng thái. |
-| `status`, `conflicts`, `restore`, `service`, `hooks`, `config`, `machines`, `claude`, `logs`, `uninstall` | ⏳ | Chưa làm. |
+| Lệnh | Làm gì |
+|---|---|
+| `setup [--step TÊN]` | Wizard (chạy lại được): bước 0–10 như trên. |
+| `login [--client FILE]` / `logout` | Đăng nhập Google Drive / thu hồi token. |
+| `folder [show]` | Tài khoản, link folder gốc và các máy đã tham gia. |
+| `projects list\|select\|map\|pending\|unmap\|mode\|exclude\|include\|dirs` | Map thư mục local với project; `map` không tham số duyệt các project mà máy khác đang chờ đặt thư mục. |
+| `run` / `sync [--dry-run] [--pull-only --project X]` | Một chu kỳ sync (service dùng lệnh này). `--pull-only` chỉ cài về, cho một project. |
+| `claude [đối số…]` | Kéo project của thư mục hiện tại, rồi mở `claude` với đối số của bạn. Không bao giờ chờ quá 60 s. |
+| `status [--json]` / `logs [-f]` | Trạng thái, thời điểm sync, danh sách tụt hậu/xung đột/chờ map; log. |
+| `conflicts [list\|show <sid>]` | Session mà hai máy viết tiếp riêng rẽ và đã được tách thành hai session. |
+| `restore <sid>` | Cài lại session trên Drive mà retention đã xoá ở máy này. |
+| `service install\|uninstall\|status\|kick` | systemd user timer (Linux/WSL) hoặc Task Scheduler + launcher ẩn (Windows). |
+| `hooks install\|uninstall` | Hook Claude Code: thông báo lúc mở session, chặn gõ vào session cũ, đánh thức sync khi đóng session. |
+| `config get\|set <khoá> <giá trị>` | `interval` 5\|10, `guard` block\|warn\|off, `throttle_live_min`, `lang`, `mode`, `scan_dirs`, `wsl_distro`/`wsl_user`. |
+| `machines [list\|forget <tên>]` | Các máy trên Drive; `forget` giữ lại mọi version không có ở nơi nào khác. |
+| `doctor` | Phụ thuộc, đăng nhập, folder gốc Drive, service, launcher, hook, retention, ID trùng, thư mục rác, cấu trúc Claude lạ. |
+| `repair [--dry-run] [--yes] [--project X]` | Sửa transcript cũ (CRLF, JSON bị serialize lại, path WSL/Windows, thư mục backup lạc). |
+| `uninstall [--purge]` | Gỡ service và hook; `--purge` xoá luôn `~/.claude-sync`. Không bao giờ đụng `~/.claude` và Drive. |
 
-Mã thoát: `0` OK · `1` lỗi · `2` sai cú pháp · `3` cần đăng nhập · `4` offline · `5` đang có lần chạy khác ·
+Mã thoát: `0` ok · `1` lỗi · `2` sai cú pháp · `3` cần đăng nhập · `4` offline · `5` đang có lần chạy khác ·
 `6` cần repair.
 
 ## Cấu hình
@@ -144,16 +152,26 @@ Mã thoát: `0` OK · `1` lỗi · `2` sai cú pháp · `3` cần đăng nhập 
 
 ## Trạng thái
 
-Đã xong và có test: khởi động môi trường, xử lý path Windows/Linux, quét session local, OAuth và lưu token,
-client Google Drive (đã kiểm với Drive thật), folder gốc và định danh máy, `setup` bước 0–6, map project,
-dịch path, sửa dữ liệu cũ (đã chạy trên dữ liệu thật), chuỗi version và manifest, giao diện Anh/Việt, và
-engine đồng bộ đầu tiên cho session chỉ nối thêm giữa các máy giả lập.
+Toàn bộ thiết kế v1 đã được làm và có test trên các máy giả lập (một thư mục local dùng chung thay cho
+Drive): nối thêm, viết lại, retention và restore, di chuyển session, tách nhánh xác định, session đang mở,
+subagent, lịch sử file, memory và plan, dọn rác, phát hiện thư mục mới, lịch chạy Linux và Windows, hook,
+wrapper, `setup`, `doctor` và `uninstall`. Client Google Drive đã được kiểm với Drive thật.
 
-Chưa xong: lần đồng bộ đầu khi hai máy chưa có version chung và transcript bị viết lại, tách nhánh khi
-xung đột, xử lý session đang mở và `live.json`, đồng bộ subagent / lịch sử file / memory / plan, dọn rác
-trên Drive, các lệnh status và logs, chạy nền theo lịch (systemd / Task Scheduler), hook Claude Code,
-wrapper `claude`, phần còn lại của `setup`, và kiểm thử đầu-cuối trên máy thật. Công việc được theo dõi
-bằng các ticket trong [.scratch/claude-sync-v1/](.scratch/claude-sync-v1/spec.md).
+Còn phải làm tay (ticket #30): checklist đầu-cuối trên ba máy thật (Windows, WSL, Ubuntu), chạy thật
+Task Scheduler / systemd, và xem thông báo của hook trong Claude Code. Công việc được theo dõi bằng các
+ticket trong [.scratch/claude-sync-v1/](.scratch/claude-sync-v1/spec.md).
+
+### Hiệu năng (Git Bash trên Windows, một transcript 58 MB)
+
+| Chu kỳ | Thời gian |
+|---|---|
+| công bố lần đầu session 58 MB | ~17–22 s |
+| chu kỳ im lặng (không có gì đổi) | ~12–13 s |
+| thêm vài dòng (chỉ upload phần đuôi) | ~13 s |
+| cài lần đầu session 58 MB trên máy khác | ~17–19 s |
+
+Thời gian chủ yếu là chi phí tạo tiến trình trên Git Bash (khoảng 45 ms mỗi lệnh), không phải kích thước
+dữ liệu: cùng chu kỳ trên Linux/WSL nhanh hơn nhiều lần. Một chu kỳ vẫn thấp xa giới hạn mềm 7 phút.
 
 ## Phát triển
 

@@ -90,34 +90,42 @@ Keep the JSON out of version control (this repository's `.gitignore` already ign
 ## Quick start
 
 ```bash
-# 1. Language, OAuth client, proxy, Google sign-in, root folder, machine name
+# 1. The whole wizard: language, OAuth client, proxy, Google sign-in, root folder, machine name,
+#    transcript check, project selection, retention, service, hooks and the first sync
 bash bin/claude-sync setup
 
-# 2. See which folders have Claude sessions and choose what to sync
-bash bin/claude-sync projects list
-bash bin/claude-sync projects select        # or: projects map <name> <folder>
+# 2. Optional: catch up before every Claude start (add to your shell profile)
+alias claude='claude-sync claude'
 
-# 3. Check the local Claude data; fix legacy damage if doctor reports any
-bash bin/claude-sync doctor
-bash bin/claude-sync repair --dry-run       # read-only report
-bash bin/claude-sync repair                 # asks before changing anything; backs up first
+# 3. Day to day
+claude-sync status          # state, last sync, sessions behind, conflicts, projects waiting for a folder
+claude-sync doctor          # what is wrong with this installation
 ```
 
 Run `setup` on every machine with the same OAuth client JSON. The first machine creates the
-`Claude Sync` folder; the others find it automatically.
+`Claude Sync` folder; the others find it automatically. A project that another machine syncs waits
+until you pick its folder here (`claude-sync projects map`); it is never mapped by guesswork.
 
 ## Commands
 
-| Command | | What it does |
-|---|---|---|
-| `setup [--step NAME]` | ✅ steps 0–6 | Wizard: language, dependencies, OAuth client, proxy, sign-in, root folder, machine name. Re-runnable. |
-| `login [--client FILE]` / `logout` | ✅ | Sign in to Google Drive / revoke the token. |
-| `folder [show]` | ✅ | Account, root folder link and the machines that joined. |
-| `projects list\|select\|map\|unmap\|mode\|exclude\|include\|dirs` | ✅ | Map local folders to projects; choose what is synced. |
-| `doctor` | ✅ basic | Dependencies, Claude config dir, sessions, junk folders, duplicate ids, retention. |
-| `repair [--dry-run] [--yes] [--project X]` | ✅ | Fix legacy transcripts (CRLF, re-serialized JSON, WSL/Windows paths, stray backup folders). |
-| `run` / `sync [--dry-run]` | 🚧 | One sync cycle. Append-only sessions only; see Status. |
-| `status`, `conflicts`, `restore`, `service`, `hooks`, `config`, `machines`, `claude`, `logs`, `uninstall` | ⏳ | Not implemented yet. |
+| Command | What it does |
+|---|---|
+| `setup [--step NAME]` | Wizard (re-runnable): steps 0–10 as above. |
+| `login [--client FILE]` / `logout` | Sign in to Google Drive / revoke the token. |
+| `folder [show]` | Account, root folder link and the machines that joined. |
+| `projects list\|select\|map\|pending\|unmap\|mode\|exclude\|include\|dirs` | Map local folders to projects; `map` without arguments walks through the projects other machines are waiting to place. |
+| `run` / `sync [--dry-run] [--pull-only --project X]` | One sync cycle (used by the service). `--pull-only` only installs, for one project. |
+| `claude [args…]` | Pull this folder's project, then start `claude` with your arguments. Never waits more than 60 s. |
+| `status [--json]` / `logs [-f]` | State, last sync times, behind/conflict/waiting lists; the log. |
+| `conflicts [list\|show <sid>]` | Sessions that two machines continued separately and were split into two sessions. |
+| `restore <sid>` | Install a session from Drive that retention removed here. |
+| `service install\|uninstall\|status\|kick` | systemd user timer (Linux/WSL) or Task Scheduler task + hidden launcher (Windows). |
+| `hooks install\|uninstall` | Claude Code hooks: notices at session start, a guard against typing into a stale session, a kick at session end. |
+| `config get\|set <key> <value>` | `interval` 5\|10, `guard` block\|warn\|off, `throttle_live_min`, `lang`, `mode`, `scan_dirs`, `wsl_distro`/`wsl_user`. |
+| `machines [list\|forget <name>]` | Machines on Drive; `forget` keeps any version that exists nowhere else. |
+| `doctor` | Dependencies, login, Drive root, service, launcher, hooks, retention, duplicate ids, junk folders, unknown Claude layouts. |
+| `repair [--dry-run] [--yes] [--project X]` | Fix legacy transcripts (CRLF, re-serialized JSON, WSL/Windows paths, stray backup folders). |
+| `uninstall [--purge]` | Remove service and hooks; `--purge` also deletes `~/.claude-sync`. `~/.claude` and Drive are never touched. |
 
 Exit codes: `0` ok · `1` error · `2` usage · `3` sign-in required · `4` offline · `5` another run in
 progress · `6` repair needed.
@@ -146,17 +154,27 @@ progress · `6` repair needed.
 
 ## Status
 
-Done and tested: environment bootstrap, Windows/Linux path handling, local session scan, OAuth and
-token storage, Google Drive client (verified against real Drive), root folder and machine identity,
-`setup` steps 0–6, project mapping, path translation, legacy repair (used on real data), version chains
-and manifests, English/Vietnamese UI, and a first sync engine for append-only sessions between
-simulated machines.
+All of the v1 design is implemented and covered by tests on simulated machines (a shared local
+folder standing in for Drive): append, rewrite, retention and restore, relocation, deterministic
+forks, open sessions, subagents, file history, memory and plans, garbage collection, new-folder
+detection, the Linux and Windows schedulers, hooks, the wrapper, `setup`, `doctor` and `uninstall`.
+The Google Drive client was verified against real Drive.
 
-Not done yet: first sync without a shared base and transcript rewrites, conflict forks, open-session
-handling and `live.json`, subagent/file-history/memory/plan sync, garbage collection, status and logs
-commands, background scheduling (systemd / Task Scheduler), Claude Code hooks, the `claude` wrapper,
-the rest of `setup`, and end-to-end tests on real machines. Work is tracked as tickets in
-[.scratch/claude-sync-v1/](.scratch/claude-sync-v1/spec.md).
+Still to do by hand (ticket #30): the end-to-end checklist on three real machines (Windows, WSL,
+Ubuntu), a real Task Scheduler / systemd run, and checking the hook notices inside Claude Code.
+Work is tracked as tickets in [.scratch/claude-sync-v1/](.scratch/claude-sync-v1/spec.md).
+
+### Performance (Git Bash on Windows, one 58 MB transcript)
+
+| Cycle | Time |
+|---|---|
+| first publish of the 58 MB session | ~17–22 s |
+| quiet cycle (nothing changed) | ~12–13 s |
+| a few new lines appended (only the tail is uploaded) | ~13 s |
+| first install of the 58 MB session on another machine | ~17–19 s |
+
+The time is dominated by process creation on Git Bash (about 45 ms per command), not by data size:
+the same cycle on Linux/WSL is several times faster. A cycle stays far below the 7-minute soft limit.
 
 ## Development
 

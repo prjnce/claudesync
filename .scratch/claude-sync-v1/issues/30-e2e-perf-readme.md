@@ -33,3 +33,7 @@ Chạy trên 3 máy thật: Windows (máy này) ↔ WSL `Ubuntu2404` ↔ một m
 
 ## Comments
 - 2026-10-05: hiển thị `docs/logo.png` ở đầu README.
+
+## Comments
+
+- 2026-10-11: phần làm được không cần người: README (en + vi) cập nhật theo các lệnh đã làm, mục Hiệu năng (58 MB trên Git Bash: công bố lần đầu ~17–22 s, chu kỳ im lặng ~12–13 s, nối thêm ~13 s, cài lần đầu ~17–19 s; chi phí chủ yếu là ~45 ms mỗi lần tạo tiến trình, không phải dữ liệu). Tối ưu đã làm: cache cwd khởi chạy (`state/launch_cache.tsv`), chỉ quét thư mục ứng viên khi có project chờ map. Còn lại cho người: checklist A1–A8 trên 3 máy thật, guard ở tab VS Code cũ, đăng ký task/timer thật.

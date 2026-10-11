@@ -216,7 +216,8 @@ cs_pend_detect() {
       nbytes[$id]=$((${nbytes[$id]:-0} + bytes))
     done < <(cs_jq -r '[.sessions[] | select((.project // "") != "" and .project != "unmapped")] | group_by(.project) | .[] | [.[0].project, length, (map(.len) | add)] | @tsv' "$f")
   done
-  cs_pend_scan_update
+  # only projects that wait for a folder here need candidates, so only then are directories looked at
+  if ((${#nalias[@]})); then cs_pend_scan_update; fi
   for id in "${!nalias[@]}"; do
     seen_remote[$id]=1
     cs_pend_row_get remote "$id" && [[ ${CS_PR[10]} == excluded ]] && continue
