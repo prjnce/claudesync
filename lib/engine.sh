@@ -92,6 +92,7 @@ cs_eng_fetch_remotes() {
     gz="$CS_HOME/staging/remote.$mid.gz"
     drv_download "$id" "$gz" || {
       cs_log warn "run: could not download the manifest of $mid"
+      CS_RUN_REMOTE_FAIL=1
       continue
     }
     if j=$(cs_manifest_read "$gz"); then
@@ -333,7 +334,14 @@ cs_eng_install() {
     cs_journal_end "$jr"
     return 1
   fi
-  if ((start == 0)) && [[ -f $f ]] && (($(cs_eng_deleted_uuids "$f" "$tmp") > CS_REWRITE_MAX_DELETED)); then
+  if [[ ! -e $f ]]; then
+    # A new session: its bundle and subagent transcripts first, so the transcript never points at files that
+    # are not there yet (SPEC §12.7 step 4). A crash here is finished by the next cycle.
+    cs_bundle_remote_install "$sid" "$dir"
+    cs_agent_sync "$sid" "$dir" || true
+    [[ -z ${CS_TEST_CRASH_AFTER_BUNDLE:-} ]] || exit 99
+  fi
+  if ((start == 0)) && [[ -z ${CS_INSTALL_FORCE:-} && -f $f ]] && (($(cs_eng_deleted_uuids "$f" "$tmp") > CS_REWRITE_MAX_DELETED)); then
     # SPEC §12.4: a replacement that drops more than a few chat lines is a divergence, not a rewrite.
     cs_log warn "run: $sid: the new version drops too many chat lines; kept as it is (forks: #20)"
     rm -f -- "$tmp" "$shaf"
@@ -678,7 +686,7 @@ cs_run() {
   }
   cs_eng_load || return
   cs_log_rotate
-  CS_RUN_DRV_RC=0 CS_RUN_FAILS=0
+  CS_RUN_DRV_RC=0 CS_RUN_FAILS=0 CS_RUN_REMOTE_FAIL=0
   local j
   while IFS= read -r j; do [[ -n $j ]] && cs_journal_abandon "$j"; done < <(cs_journal_pending)
   local prc=0
@@ -697,6 +705,8 @@ cs_run() {
     return "$CS_EXIT_ERROR"
   }
   cs_eng_fetch_remotes
+  ((dry)) || cs_pend_detect || true
+  cs_fork_known_from_manifests
   local table
   table=$(cs_eng_candidates_table)
   CS_RUN_PUBLISHED=0 CS_RUN_INSTALLED=0
@@ -752,7 +762,15 @@ cs_run() {
         install)
           cs_eng_install "$sid" "$CS_INIT_ENTRY" "$dir" || cs_eng_note_drv $?
           ;;
-        conflict) cs_log info "run: $sid has no common history with the other machines; deferred (forks: #20)" ;;
+        conflict)
+          local imid
+          imid=$(cs_eng_cands_by_size "$sid" "$cands" | head -n 1 | cut -f2)
+          cs_fork_resolve "$sid" "$f" "$pid" "$dir" "$imid" 1
+          case $CS_FORK_RESULT in
+            local_wins) to_publish+=("$sid"$'\t'"$f"$'\t'"$pid"$'\t'"$dir"$'\t'0$'\t'0) ;;
+            remote_extends) cs_eng_install "$sid" "$(cs_eng_remote_entry "$imid" "$sid")" "$dir" || cs_eng_note_drv $? ;;
+          esac
+          ;;
       esac
       continue
     fi
@@ -769,9 +787,17 @@ cs_run() {
     [[ -n $base ]] && bentry=$(cat -- "$(cs_eng_entry_file "$sid")" 2>/dev/null || true)
     pick=$(cs_eng_pick "$sid" "$bentry" "$cands")
     if [[ $pick == CONFLICT* ]] || { [[ -n $pick ]] && ((changed)); }; then
-      cs_log info "run: $sid diverged from ${pick#*$'\t'} (changed here: $changed); deferred (forks: #20)"
-      ((dry)) || cs_eng_row_set "$sid" "$pid" "$dir" "$lsize" "$lmt" "$ilen" "$isha" "${base:--}" conflict
-      continue
+      # Diverged: decide deterministically who wins; the owner of the losing branch forks it (SPEC §12.5).
+      ((dry)) && continue
+      cs_eng_time_left || continue
+      local cmid
+      if [[ $pick == CONFLICT* ]]; then cmid=${pick#*$'\t'}; else cmid=${pick%%$'\t'*}; fi
+      cs_fork_resolve "$sid" "$f" "$pid" "$dir" "$cmid" "$changed"
+      case $CS_FORK_RESULT in
+        local_wins) pick='' ;;
+        remote_extends) pick="$cmid"$'\t'"$(cs_jq -r .head <<<"$(cs_eng_remote_entry "$cmid" "$sid")")" ;;
+        *) continue ;;
+      esac
     fi
     if [[ -n $pick ]]; then
       if [[ $live == *" $sid "* ]]; then
@@ -873,11 +899,23 @@ cs_run() {
     fi
   done
   if ((!dry)); then
+    # 4. Bundles and subagent transcripts of every synced session.
+    local bdir
+    while IFS=$'\t' read -r sid bdir; do
+      cs_eng_time_left || break
+      cs_bundle_sync "$sid" "$bdir" || true
+      cs_agent_sync "$sid" "$bdir" || true
+    done < <(cs_tsv_rows sessions | "$CS_AWK" -F'\t' -v OFS='\t' '$10 == "synced" && $8 != "-" { print $1, $3 }')
+    # 5. Memory (3-way merge) and plans.
+    if cs_eng_time_left; then cs_mem_sync || true; fi
+    if cs_eng_time_left; then cs_plans_sync || true; fi
     local -a lv
     read -r -a lv <<<"$live"
     cs_eng_live_write "${lv[@]}" || cs_eng_note_rc $?
     cs_eng_live_read || true
+    cs_pend_publish_projects || true
     cs_eng_publish_manifest || cs_eng_note_rc $?
+    cs_gc_run || true
   fi
   cs_say engine.summary "$CS_RUN_INSTALLED" "$CS_RUN_PUBLISHED"
   ((dry)) && return 0

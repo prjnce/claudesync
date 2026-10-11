@@ -225,8 +225,8 @@ cs_project_of_cwd() {
   printf '%s\n' "$best"
 }
 
-# cs_project_map ALIAS_OR_ID PATH: map PATH as a root of an existing project, or of a new project named
-# ALIAS. Prints "project_id<TAB>cwd_root<TAB>new|added|existing". Warnings go to stderr.
+# cs_project_map ALIAS_OR_ID PATH [PROJECT_ID]: map PATH as a root of an existing project, or of a new project
+# named ALIAS (with PROJECT_ID when it is given). Prints "project_id<TAB>cwd_root<TAB>new|added|existing". Warnings go to stderr.
 cs_project_map() {
   local name=$1 path=$2 posix native root real mem keys id state=added other
   posix=$(cs_posix_of_native "$(cs_native_path "$path")")
@@ -261,7 +261,7 @@ cs_project_map() {
   if id=$(cs_project_find "$name"); then
     cs_tsv_get projects "$id" "$root" >/dev/null && state=existing
   else
-    id=$(cs_new_project_id)
+    id=${3:-$(cs_new_project_id)} # a project from another machine keeps its project_id
     state=new
   fi
   local alias

@@ -1,6 +1,6 @@
 # 22 — Memory merge 3 chiều và plans
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M4
@@ -20,7 +20,11 @@ Spec: SPEC §9.1 (`mem/`, `plans/`), §9.2 (`memory`, `plans`), §13 (dòng Plan
 
 ## Tiêu chí nghiệm thu
 
-- [ ] A xoá `foo.md` và dòng index của nó trong `MEMORY.md`, B không đổi → B cũng xoá, có backup (**M9**).
-- [ ] Cả hai sửa `MEMORY.md` ở dòng khác nhau → merge sạch; cùng dòng → union, không mất dòng nào.
-- [ ] Không có `git` trên PATH → quy tắc dự phòng chạy đúng.
-- [ ] File memory tên `a:b.md` từ Linux → Windows bỏ qua và báo, không lỗi chu kỳ.
+- [x] A xoá `foo.md` và dòng index của nó trong `MEMORY.md`, B không đổi → B cũng xoá, có backup (**M9**).
+- [x] Cả hai sửa `MEMORY.md` ở dòng khác nhau → merge sạch; cùng dòng → union, không mất dòng nào.
+- [x] Không có `git` trên PATH → quy tắc dự phòng chạy đúng.
+- [x] File memory tên `a:b.md` từ Linux → Windows bỏ qua và báo, không lỗi chu kỳ.
+
+## Comments
+
+- 2026-10-08: `lib/memory.sh` (`cs_dsync_run` chung cho memory và plans), base + `.seen` (version đã từng dùng, chặn manifest cũ của máy khác kéo lùi), `git merge-file` (MEMORY.md `--union` khi xung đột; không git hoặc file khác → giữ local, bản kia vào `conflicts/` và `status.json.memory_conflicts`). Plans: chỉ slug có trong transcript của session đang sync. Tên không hợp lệ trên Windows: bỏ qua. Test `test/memory.bats` (6 ca, gồm M9). Ghi nhớ: test dùng hai máy POSIX vì memDir của máy Windows giả lập không phải đường dẫn thật. Lệnh `claude-sync conflicts` vẫn là #20.
