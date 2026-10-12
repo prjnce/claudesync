@@ -103,7 +103,7 @@ declare -gA CS_MSG_en=(
   [setup.machine_done]='This machine is "%s" (%s).'
   [setup.bad_step]='unknown setup step: %s (steps: %s)'
   [setup.step_failed]='setup step "%s" failed; fix the problem and run "claude-sync setup" again (finished steps are kept).'
-  [setup.done_so_far]='Steps 0-6 are done. Choosing projects, the schedule and the first sync come in the next version.'
+  [setup.done_so_far]='Setup finished. Check anything at any time with "claude-sync status" and "claude-sync doctor".'
   [folder.not_set]='No root folder is set up yet: run "claude-sync setup".'
   [folder.missing]='The root folder %s is missing or in the trash (ROOT_MISSING). claude-sync will not recreate it on its own.'
 

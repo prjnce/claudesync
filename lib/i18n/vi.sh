@@ -103,7 +103,7 @@ declare -gA CS_MSG_vi=(
   [setup.machine_done]='Máy này là "%s" (%s).'
   [setup.bad_step]='bước setup không tồn tại: %s (các bước: %s)'
   [setup.step_failed]='bước setup "%s" bị lỗi; sửa lỗi rồi chạy lại "claude-sync setup" (các bước đã xong được giữ lại).'
-  [setup.done_so_far]='Đã xong bước 0-6. Chọn project, lập lịch và lần sync đầu sẽ có ở phiên bản sau.'
+  [setup.done_so_far]='Đã setup xong. Xem tình trạng bất cứ lúc nào bằng "claude-sync status" và "claude-sync doctor".'
   [folder.not_set]='Chưa thiết lập folder gốc: hãy chạy "claude-sync setup".'
   [folder.missing]='Folder gốc %s không còn hoặc đang ở thùng rác (ROOT_MISSING). claude-sync sẽ không tự tạo lại.'
 
