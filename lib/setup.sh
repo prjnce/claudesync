@@ -196,7 +196,7 @@ cs_setup_project_items() {
 
 # Step 8: one numbered list of everything that uses Claude here; the user picks what is synced (Enter = all).
 cs_setup_choose_projects() {
-  local items i=0 kind key alias root id n b ans tries=0 line
+  local items i=0 kind key alias root id n b ans tries=0 line none=0
   local -a kinds=() keys=() aliases=() roots=() sel=()
   items=$(cs_setup_project_items)
   if [[ -z $items ]]; then
@@ -217,6 +217,10 @@ cs_setup_choose_projects() {
       for ((n = 1; n <= i; n++)); do sel[n]=1; done
       break
     fi
+    if [[ $ans == 0 || ${ans,,} == none || ${ans,,} == n ]]; then
+      none=1 # sync nothing from this machine (for now)
+      break
+    fi
     local bad=0 tok
     local IFS=', '
     for tok in $ans; do
@@ -227,7 +231,7 @@ cs_setup_choose_projects() {
     sel=()
     cs_say setup.bad_choice >&2
   done
-  ((${#sel[@]})) || return 0
+  ((${#sel[@]} || none)) || return 0
   local chosen=0
   for ((n = 1; n <= i; n++)); do
     [[ -n ${sel[n]:-} ]] && chosen=$((chosen + 1))
@@ -240,7 +244,10 @@ cs_setup_choose_projects() {
       cs_say projects.mapped "$alias" "$id" "${roots[n - 1]}"
     fi
   done
-  if ((chosen == i)); then
+  if ((none)); then
+    cs_config_set mode selected
+    cs_say setup.projects_mode_none
+  elif ((chosen == i)); then
     cs_config_set mode all
     cs_say setup.projects_mode_all
   else

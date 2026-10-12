@@ -193,6 +193,13 @@ PC-A
   [ "$status" -eq 0 ]
   [ "$(grep -vc '^#' "$CLAUDE_SYNC_HOME/state/projects.tsv")" -eq 2 ]
   [ "$(awk -F'	' '$3 == "P0" { print $6 }' "$CLAUDE_SYNC_HOME/state/projects.tsv")" = 0 ]
+  # 0 = none: nothing is synced from this machine, every project is left out, mode selected
+  run bash -c 'printf "0
+" | bash "$CS_ROOT/bin/claude-sync" setup --step projects'
+  [ "$status" -eq 0 ]
+  [[ $output == *'Nothing is synced from this machine'* ]]
+  [ "$(cut -f6 "$CLAUDE_SYNC_HOME/state/projects.tsv" | grep -v '^enabled' | sort -u)" = 0 ]
+  grep -qx 'mode=selected' "$CLAUDE_SYNC_HOME/config"
 }
 
 @test "step 9: even when the value is fine it asks; a new value is written after a backup" {
