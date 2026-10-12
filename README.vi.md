@@ -117,7 +117,7 @@ khác tự tìm thấy. Project mà máy khác đang sync sẽ chờ cho đến 
 | `login [--client FILE]` / `logout` | Đăng nhập Google Drive / thu hồi token. |
 | `folder [show]` | Tài khoản, link folder gốc và các máy đã tham gia. |
 | `projects list\|select\|map\|pending\|unmap\|mode\|exclude\|include\|dirs` | Map thư mục local với project; `map` không tham số duyệt các project mà máy khác đang chờ đặt thư mục. |
-| `run` / `sync [--dry-run] [--pull-only --project X]` | Một chu kỳ sync (service dùng lệnh này). `--pull-only` chỉ cài về, cho một project. |
+| `run` / `sync [--dry-run] [--pull-only --project X] [--progress\|--quiet]` | Một chu kỳ sync (service dùng lệnh này). `--pull-only` chỉ cài về, cho một project. Trong terminal có hiện tiến độ (`[3/12 - 41%] Đang công bố session …`); `--quiet` tắt, `--progress` ép bật. |
 | `claude [đối số…]` | Kéo project của thư mục hiện tại, rồi mở `claude` với đối số của bạn. Không bao giờ chờ quá 60 s. |
 | `status [--json]` / `logs [-f]` | Trạng thái, thời điểm sync, danh sách tụt hậu/xung đột/chờ map; log. |
 | `conflicts [list\|show <sid>]` | Session mà hai máy viết tiếp riêng rẽ và đã được tách thành hai session. |

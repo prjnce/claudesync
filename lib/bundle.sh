@@ -115,6 +115,7 @@ cs_bundle_sync() {
     cs_bundle_man_set "$sid" files "$rel" "$(cs_jq -nc --arg m "$CS_ME" --arg id "$id" --arg sha "$sha" --arg mode "$mode" '{m: $m, id: $id, sha: $sha, mode: $mode}')"
     rsha[$rel]=$sha rsize[$rel]=$size rmt[$rel]=$mt up[$rel]=1
     cs_log info "run: bundle file uploaded for $sid"
+    CS_BUNDLE_UPLOADED=$((${CS_BUNDLE_UPLOADED:-0} + 1))
   done < <(cs_bundle_list "$sid" "$dir")
   cs_bundle_record_save "$recf" rsha rsize rmt
   cs_bundle_remote_install "$sid" "$dir"

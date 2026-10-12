@@ -119,7 +119,7 @@ until you pick its folder here (`claude-sync projects map`); it is never mapped 
 | `login [--client FILE]` / `logout` | Sign in to Google Drive / revoke the token. |
 | `folder [show]` | Account, root folder link and the machines that joined. |
 | `projects list\|select\|map\|pending\|unmap\|mode\|exclude\|include\|dirs` | Map local folders to projects; `map` without arguments walks through the projects other machines are waiting to place. |
-| `run` / `sync [--dry-run] [--pull-only --project X]` | One sync cycle (used by the service). `--pull-only` only installs, for one project. |
+| `run` / `sync [--dry-run] [--pull-only --project X] [--progress\|--quiet]` | One sync cycle (used by the service). `--pull-only` only installs, for one project. In a terminal it shows progress (`[3/12 - 41%] Publishing session …`); `--quiet` turns that off, `--progress` forces it. |
 | `claude [args…]` | Pull this folder's project, then start `claude` with your arguments. Never waits more than 60 s. |
 | `status [--json]` / `logs [-f]` | State, last sync times, behind/conflict/waiting lists; the log. |
 | `conflicts [list\|show <sid>]` | Sessions that two machines continued separately and were split into two sessions. |

@@ -410,3 +410,24 @@ a_move_to() {
     [[ $output == *'0 installed, 0 published'* ]] || { echo "$m: $output"; return 1; }
   done
 }
+
+@test "progress: with CS_PROGRESS=1 a run says what it will do and where it is; without it nothing extra is printed" {
+  sim_write A "$ASLUG" "$SID" "$(aline 1)" "$(aline 2)"
+  sim_write A "$ASLUG" 0b7a1c2e-1111-4222-8333-44445555aaaa "$(aline 3)"
+  mkdir -p "$SIM/A/claude/projects/$ASLUG/$SID"
+  printf 'attachment
+' >"$SIM/A/claude/projects/$ASLUG/$SID/note.txt"
+  CS_PROGRESS=1 run sim_run A
+  echo "$output"
+  [[ $output == *'To publish: 2 session(s)'* ]]
+  [[ $output == *'[1/2] Publishing session'* ]]
+  [[ $output == *'[2/2'*'100%'*'Published session'* ]]
+  [[ $output == *'Synced the attached files of session 0b7a1c2e'* ]]
+  CS_PROGRESS=1 run sim_run B
+  [[ $output == *'Installing session'* && $output == *'Installed session'* ]]
+  [[ $output == *'2 installed so far'* ]]
+  sim_write A "$ASLUG" "$SID" "$(aline 4)"
+  CS_PROGRESS=0 run sim_run A
+  [[ $output != *'Publishing session'* ]]
+  [[ $output == *'Sync done'* ]]
+}

@@ -14,8 +14,20 @@
 CS_ENGINE_LOADED=1
 
 CS_SOFT_DEADLINE=${CS_SOFT_DEADLINE:-420} # SPEC §14: no new work after 7 minutes
+CS_PROGRESS=${CS_PROGRESS:-}               # 1: say what is being done (default: when stderr is a terminal)
 CS_PULL_ONLY=${CS_PULL_ONLY:-0}           # --pull-only: only installs, for one project (the wrapper, SPEC §17.4)
 CS_ONLY_PROJECT=${CS_ONLY_PROJECT:-}
+
+# --- progress ----------------------------------------------------------------------------------------------
+
+# cs_progress KEY [ARGS...]: one progress line on stderr when CS_PROGRESS=1 (a person is watching).
+cs_progress() {
+  [[ ${CS_PROGRESS:-0} == 1 ]] || return 0
+  printf '%s\n' "$(cs_t "$@")" >&2
+}
+
+# cs_short_sid SID: the first 8 characters, enough to tell sessions apart.
+cs_short_sid() { printf '%s\n' "${1:0:8}"; }
 
 # --- context ---------------------------------------------------------------------------------------------
 
@@ -318,6 +330,7 @@ cs_eng_install() {
   mkdir -p -- "$CS_PDIR/$dir"
   tmp="$f.csync-tmp"
   sig=$(stat -c '%s %Y' -- "$f" 2>/dev/null || echo absent)
+  cs_progress progress.installing "$(cs_short_sid "$sid")"
   jr=$(cs_journal_begin install "$(cs_jq -nc --arg s "$sid" --arg v "$(cs_jq -r .head <<<"$entry")" --arg t "$tmp" '{sid: $s, version: $v, tmp: [$t]}')")
   local cnt="$CS_HOME/staging/cnt.$sid" shaf="$CS_HOME/staging/sha.$sid"
   {
@@ -399,6 +412,7 @@ cs_eng_install() {
   cs_eng_my_manifest_save "$(cs_manifest_put_session "$(cs_eng_my_manifest)" "$sid" "$entry")"
   cs_journal_end "$jr"
   cs_log info "run: installed $sid ($(( n - start )) new segment(s))"
+  cs_progress progress.installed "$(cs_short_sid "$sid")" "$(cs_human_bytes "$size")" "$((CS_RUN_INSTALLED + 1))"
   if ((CS_PULL_ONLY)); then printf 'claude-sync: installed %s\n' "$sid" >&2; fi
   CS_RUN_INSTALLED=$((CS_RUN_INSTALLED + 1))
 }
@@ -694,6 +708,8 @@ cs_run() {
     case $1 in
       --dry-run) dry=1 ;;
       --pull-only) CS_PULL_ONLY=1 ;;
+      --progress) CS_PROGRESS=1 ;;
+      --quiet) CS_PROGRESS=0 ;;
       --project)
         shift
         proj=${1:-}
@@ -703,6 +719,9 @@ cs_run() {
     shift
   done
   mkdir -p -- "$CS_HOME"
+  if [[ -z $CS_PROGRESS ]]; then
+    if [[ -t 2 ]]; then CS_PROGRESS=1; else CS_PROGRESS=0; fi
+  fi
   if [[ -n $proj ]]; then
     CS_ONLY_PROJECT=$(cs_project_of_cwd "$proj" 2>/dev/null) || CS_ONLY_PROJECT=$(cs_project_find "$proj" 2>/dev/null) || {
       cs_say engine.unknown_project "$proj" >&2
@@ -940,6 +959,15 @@ cs_run_cycle() {
   # 3. Publish.
   local item rw
   if ((CS_PULL_ONLY)); then to_publish=(); fi
+  local n_pub=${#to_publish[@]} pub_bytes=0 done_bytes=0 k=0 sz pct t0
+  if ((!dry && CS_PROGRESS == 1 && n_pub)); then
+    for item in "${to_publish[@]}"; do
+      IFS=$'\t' read -r sid f pid dir ilen rw <<<"$item"
+      sz=$(stat -c %s -- "$f" 2>/dev/null) || sz=0
+      if [[ $rw == 1 ]]; then pub_bytes=$((pub_bytes + sz)); else pub_bytes=$((pub_bytes + sz - ilen)); fi
+    done
+    cs_progress progress.plan "$n_pub" "$(cs_human_bytes "$pub_bytes")"
+  fi
   for item in "${to_publish[@]}"; do
     IFS=$'\t' read -r sid f pid dir ilen rw <<<"$item"
     ((dry)) && {
@@ -947,8 +975,16 @@ cs_run_cycle() {
       continue
     }
     cs_eng_time_left || break
+    k=$((k + 1))
+    sz=$(stat -c %s -- "$f" 2>/dev/null) || sz=0
+    if [[ $rw != 1 ]]; then sz=$((sz - ilen)); fi
+    t0=$SECONDS
+    cs_progress progress.publishing "$k" "$n_pub" "$(cs_short_sid "$sid")" "$(cs_human_bytes "$sz")"
     if cs_eng_publish "$sid" "$f" "$pid" "$dir" "$ilen" "$rw"; then
       [[ $live == *" $sid "* ]] && date +%s >"$CS_HOME/state/live_pub.$sid"
+      done_bytes=$((done_bytes + sz))
+      if ((pub_bytes > 0)); then pct=$((done_bytes * 100 / pub_bytes)); else pct=100; fi
+      cs_progress progress.published "$k" "$n_pub" "$pct" "$(cs_short_sid "$sid")" "$((SECONDS - t0))"
     else
       cs_eng_note_rc $?
       cs_log warn "run: publishing $sid failed; retried next cycle"
@@ -967,8 +1003,10 @@ cs_run_cycle() {
     local bdir
     while IFS=$'\t' read -r sid bdir; do
       cs_eng_time_left || break
+      CS_BUNDLE_UPLOADED=0
       cs_bundle_sync "$sid" "$bdir" || true
       cs_agent_sync "$sid" "$bdir" || true
+      if ((CS_BUNDLE_UPLOADED > 0)); then cs_progress progress.bundle "$(cs_short_sid "$sid")" "$CS_BUNDLE_UPLOADED"; fi
     done < <(cs_tsv_rows sessions | "$CS_AWK" -F'\t' -v OFS='\t' '$10 == "synced" && $8 != "-" { print $1, $3 }')
     # 5. Memory (3-way merge) and plans.
     if cs_eng_time_left; then cs_mem_sync || true; fi
