@@ -1,6 +1,6 @@
 # 15 — Repair dữ liệu cũ (§19)
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent (chạy thật trên máy này cần người dùng xác nhận từng bước)
 Type: task
 Mốc: M3

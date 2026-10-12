@@ -1,6 +1,6 @@
 # 16 — Chuỗi segment và mô hình manifest
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M4

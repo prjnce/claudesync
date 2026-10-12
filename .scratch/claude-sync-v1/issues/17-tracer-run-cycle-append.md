@@ -1,6 +1,6 @@
 # 17 — Tracer: chu kỳ run, công bố/cài phần nối thêm
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M4

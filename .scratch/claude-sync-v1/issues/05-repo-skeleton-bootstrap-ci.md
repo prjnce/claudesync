@@ -1,6 +1,6 @@
 # 05 — Repo skeleton, bootstrap, core, CI
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M1

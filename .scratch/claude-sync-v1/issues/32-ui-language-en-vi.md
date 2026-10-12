@@ -1,6 +1,6 @@
 # 32 — Ngôn ngữ giao diện en/vi
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M1

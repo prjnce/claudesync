@@ -1,6 +1,6 @@
 # 06 — Module platform: nat, cc_slug, realpath, khoá
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M1

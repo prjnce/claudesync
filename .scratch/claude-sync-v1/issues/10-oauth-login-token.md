@@ -1,6 +1,6 @@
 # 10 — OAuth login/logout và lưu token
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent (bước kiểm thật cần người dùng mở trình duyệt)
 Type: task
 Mốc: M2

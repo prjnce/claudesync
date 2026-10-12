@@ -1,6 +1,6 @@
 # 19 — Session đang mở và live.json
 
-Status: needs-triage
+Status: done (thiếu test M5)
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M4

@@ -1,6 +1,6 @@
 # 07 — DB local và journal
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M1

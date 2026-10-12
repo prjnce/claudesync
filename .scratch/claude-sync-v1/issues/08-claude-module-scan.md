@@ -1,6 +1,6 @@
 # 08 — Module claude: quét session, registry, retention
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M1

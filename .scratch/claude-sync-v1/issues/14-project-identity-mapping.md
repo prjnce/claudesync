@@ -1,6 +1,6 @@
 # 14 — Định danh và map project (§6)
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M4

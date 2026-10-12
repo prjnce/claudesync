@@ -1,6 +1,6 @@
 # 12 — Folder gốc, marker, setup bước 1–6
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M2

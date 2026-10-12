@@ -1,6 +1,6 @@
 # 13 — Transform dịch path (§7)
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M4 (đưa lên trước vì #15 repair cần)

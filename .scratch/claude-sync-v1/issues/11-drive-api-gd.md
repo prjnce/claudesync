@@ -1,6 +1,6 @@
 # 11 — Wrapper gd() cho Drive API thật
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M2

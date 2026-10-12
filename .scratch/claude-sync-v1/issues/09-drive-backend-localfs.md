@@ -1,6 +1,6 @@
 # 09 — Giao diện backend Drive + backend localfs
 
-Status: needs-triage
+Status: done
 Đề xuất: ready-for-agent
 Type: task
 Mốc: M2
