@@ -6,7 +6,7 @@ declare -gA CS_MSG_vi=(
   [usage]='cách dùng: claude-sync <lệnh> [tham số]
 
   setup                         trình cài đặt đầy đủ (chạy lại được)
-  login [--device] | logout     đăng nhập / thu hồi quyền truy cập Google Drive
+  login | logout                đăng nhập / thu hồi quyền truy cập Google Drive
   google [guide|client <json>|status]  OAuth client Google của bạn: hướng dẫn, cài, trạng thái Publish
   reset [--yes]                 quên trạng thái sync local, để lần chạy sau upload lại toàn bộ
   folder [show]                 folder gốc, marker, các máy
@@ -19,7 +19,7 @@ declare -gA CS_MSG_vi=(
   repair [--dry-run]            sửa dữ liệu cũ (CRLF, JSON có dấu cách, cwd lạ, ID trùng)
   service install|uninstall|status|kick
   hooks install|uninstall
-  config get|set <key> <value>  interval=5|10, guard=block|warn|off, lang=en|vi
+  config get|set <key> <value>  interval=1..1440 (phút/min), guard=block|warn|off, lang=en|vi
   machines [list|forget <name>]
   claude [args...]              pull rồi mở claude
   doctor                        kiểm tra phụ thuộc và cài đặt

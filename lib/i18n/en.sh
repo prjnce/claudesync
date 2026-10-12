@@ -6,7 +6,7 @@ declare -gA CS_MSG_en=(
   [usage]='usage: claude-sync <command> [args]
 
   setup                         full setup wizard (re-runnable)
-  login [--device] | logout     sign in to / revoke Google Drive access
+  login | logout                sign in to / revoke Google Drive access
   google [guide|client <json>|status]  your Google OAuth client: steps, install, publishing status
   reset [--yes]                 forget the local sync state, so that the next run uploads everything again
   folder [show]                 root folder, marker, machines
@@ -19,7 +19,7 @@ declare -gA CS_MSG_en=(
   repair [--dry-run]            fix legacy data (CRLF, spaced JSON, foreign cwd, duplicates)
   service install|uninstall|status|kick
   hooks install|uninstall
-  config get|set <key> <value>  interval=5|10, guard=block|warn|off, lang=en|vi
+  config get|set <key> <value>  interval=1..1440, guard=block|warn|off, lang=en|vi
   machines [list|forget <name>]
   claude [args...]              pull, then exec claude
   doctor                        check dependencies and installation
