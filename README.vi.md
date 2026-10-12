@@ -128,6 +128,7 @@ khác tự tìm thấy. Project mà máy khác đang sync sẽ chờ cho đến 
 | `machines [list\|forget <tên>]` | Các máy trên Drive; `forget` giữ lại mọi version không có ở nơi nào khác. |
 | `doctor` | Phụ thuộc, đăng nhập, folder gốc Drive, service, launcher, hook, retention, ID trùng, thư mục rác, cấu trúc Claude lạ. |
 | `repair [--dry-run] [--yes] [--project X]` | Sửa transcript cũ (CRLF, JSON bị serialize lại, path WSL/Windows, thư mục backup lạc). |
+| `reset [--yes]` | Quên trạng thái sync local để lần chạy sau upload lại toàn bộ (đăng nhập, cấu hình, project và `~/.claude` giữ nguyên; không xoá gì trên Drive). |
 | `uninstall [--purge]` | Gỡ service và hook; `--purge` xoá luôn `~/.claude-sync`. Không bao giờ đụng `~/.claude` và Drive. |
 
 Mã thoát: `0` ok · `1` lỗi · `2` sai cú pháp · `3` cần đăng nhập · `4` offline · `5` đang có lần chạy khác ·

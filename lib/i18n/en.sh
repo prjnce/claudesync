@@ -8,6 +8,7 @@ declare -gA CS_MSG_en=(
   setup                         full setup wizard (re-runnable)
   login [--device] | logout     sign in to / revoke Google Drive access
   google [guide|client <json>|status]  your Google OAuth client: steps, install, publishing status
+  reset [--yes]                 forget the local sync state, so that the next run uploads everything again
   folder [show]                 root folder, marker, machines
   projects ...                  list|select|pending|map|unmap|mode|exclude
   sync [--pull-only|--push-only] [--project X] [--dry-run] [--verbose]
@@ -148,6 +149,11 @@ declare -gA CS_MSG_en=(
   [engine.busy]='Another claude-sync run is in progress; nothing to do.'
   [engine.root_missing]='The root folder on Google Drive is missing or in the trash (ROOT_MISSING); nothing was synced.'
   [engine.summary]='Sync done: %s installed, %s published.'
+  [reset.ask]='Forget everything this machine remembers about what was synced? (The next run uploads all sessions again. Your login, settings, chosen projects and ~/.claude stay as they are; nothing on Drive is deleted.)'
+  [reset.done]='Local sync state cleared. Run "claude-sync run" to upload everything again.'
+  [reset.drive_hint]='Files already on Drive are not touched: if you want a clean Drive too, delete this machine'\''s folder under "Claude Sync" > machines in the Drive web page (or leave it: unreferenced objects are moved to the trash after 24 hours).'
+  [reset.busy]='A sync is running; wait for it to finish and try again.'
+  [reset.usage]='Usage: claude-sync reset [--yes]'
   [progress.plan]='To publish: %s session(s), %s.'
   [progress.publishing]='[%s/%s] Publishing session %s (%s)...'
   [progress.published]='[%s/%s - %s%%] Published session %s (%s s)'

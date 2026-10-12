@@ -136,6 +136,11 @@ main() {
       cs_use platform version store drive ui cmd_google
       cmd_google "$@"
       ;;
+    reset)
+      cs_bootstrap
+      cs_use platform version store drive root ui reset
+      cs_reset "$@"
+      ;;
     folder)
       cs_bootstrap
       cmd_folder "$@"

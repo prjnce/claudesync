@@ -66,6 +66,11 @@ cs_eng_my_manifest_save() {
 
 # cs_eng_publish_manifest: upload our manifest when its content differs from the last SUCCESSFUL upload
 # (F9: nothing is written while nothing changed; a failed upload is retried next cycle).
+# cs_eng_find_own KIND: the id of our own object of that kind (manifest|live) in our area, if one exists.
+cs_eng_find_own() {
+  drv_list_children "$CS_MY_AREA" | cs_jq -r --arg k "$1" 'select(.appProperties.csKind == $k) | .id' | head -n 1
+}
+
 cs_eng_publish_manifest() {
   local j gz id rc=0 md5
   j=$(cs_eng_my_manifest)
@@ -77,8 +82,10 @@ cs_eng_publish_manifest() {
   md5=${md5#\\}
   [[ $md5 == "$(cs_drive_state_get manifest_md5)" ]] && return 0
   id=$(cs_drive_state_get manifest_id)
+  [[ -n $id ]] || id=$(cs_eng_find_own manifest) # lost the id (reset): reuse our object, never add a second manifest
   if [[ -n $id ]]; then
     drv_update_content "$id" "$gz" >/dev/null || return
+    cs_drive_state_set manifest_id "$id"
   else
     id=$(drv_upload "$CS_MY_AREA" manifest.json.gz "$gz" "{\"csKind\":\"manifest\",\"csMachine\":\"$CS_ME\"}" | cs_jq -r .id) || return
     [[ -n $id && $id != null ]] || return 1
@@ -599,7 +606,9 @@ cs_eng_live_write() {
   fi
   body=$(cs_live_json "$@")
   printf '%s\n' "$body" >"$f"
+  [[ -n $id ]] || id=$(cs_eng_find_own live)
   if [[ -n $id ]]; then
+    cs_drive_state_set live_id "$id"
     drv_update_content "$id" "$f" >/dev/null || return
   else
     id=$(drv_upload "$CS_MY_AREA" live.json "$f" "{\"csKind\":\"live\",\"csMachine\":\"$CS_ME\"}" | cs_jq -r .id) || return

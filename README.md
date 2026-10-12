@@ -130,6 +130,7 @@ until you pick its folder here (`claude-sync projects map`); it is never mapped 
 | `machines [list\|forget <name>]` | Machines on Drive; `forget` keeps any version that exists nowhere else. |
 | `doctor` | Dependencies, login, Drive root, service, launcher, hooks, retention, duplicate ids, junk folders, unknown Claude layouts. |
 | `repair [--dry-run] [--yes] [--project X]` | Fix legacy transcripts (CRLF, re-serialized JSON, WSL/Windows paths, stray backup folders). |
+| `reset [--yes]` | Forget the local sync bookkeeping so the next run uploads everything again (login, settings, projects and `~/.claude` stay; nothing on Drive is deleted). |
 | `uninstall [--purge]` | Remove service and hooks; `--purge` also deletes `~/.claude-sync`. `~/.claude` and Drive are never touched. |
 
 Exit codes: `0` ok · `1` error · `2` usage · `3` sign-in required · `4` offline · `5` another run in

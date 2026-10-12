@@ -8,6 +8,7 @@ declare -gA CS_MSG_vi=(
   setup                         trình cài đặt đầy đủ (chạy lại được)
   login [--device] | logout     đăng nhập / thu hồi quyền truy cập Google Drive
   google [guide|client <json>|status]  OAuth client Google của bạn: hướng dẫn, cài, trạng thái Publish
+  reset [--yes]                 quên trạng thái sync local, để lần chạy sau upload lại toàn bộ
   folder [show]                 folder gốc, marker, các máy
   projects ...                  list|select|pending|map|unmap|mode|exclude
   sync [--pull-only|--push-only] [--project X] [--dry-run] [--verbose]
@@ -148,6 +149,11 @@ declare -gA CS_MSG_vi=(
   [engine.busy]='Đang có một lần chạy claude-sync khác; không làm gì thêm.'
   [engine.root_missing]='Folder gốc trên Google Drive không còn hoặc đang ở thùng rác (ROOT_MISSING); chưa sync gì.'
   [engine.summary]='Sync xong: cài %s, công bố %s.'
+  [reset.ask]='Quên mọi thứ máy này đang nhớ về những gì đã sync? (Lần chạy sau sẽ upload lại toàn bộ session. Đăng nhập, cấu hình, project đã chọn và ~/.claude giữ nguyên; không xoá gì trên Drive.)'
+  [reset.done]='Đã xoá trạng thái sync local. Chạy "claude-sync run" để upload lại toàn bộ.'
+  [reset.drive_hint]='File đã có trên Drive không bị đụng tới: muốn Drive cũng sạch thì xoá thư mục của máy này trong "Claude Sync" > machines trên trang web Drive (hoặc để yên: object không còn được tham chiếu sẽ được chuyển vào thùng rác sau 24 giờ).'
+  [reset.busy]='Đang có một lần sync chạy; hãy đợi nó xong rồi thử lại.'
+  [reset.usage]='Cách dùng: claude-sync reset [--yes]'
   [progress.plan]='Cần công bố: %s session, %s.'
   [progress.publishing]='[%s/%s] Đang công bố session %s (%s)...'
   [progress.published]='[%s/%s - %s%%] Đã công bố session %s (%s giây)'
