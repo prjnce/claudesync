@@ -1,0 +1,48 @@
+name: release
+# Push a tag vX.Y.Z (X.Y.Z = CS_VERSION in lib/core.sh) and this builds the release files and publishes them.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: The tag must match CS_VERSION
+        run: |
+          ver=$(sed -n 's/^CS_VERSION=//p' lib/core.sh)
+          echo "tag=$GITHUB_REF_NAME  CS_VERSION=$ver"
+          [ "$GITHUB_REF_NAME" = "v$ver" ] || { echo "::error::tag $GITHUB_REF_NAME does not match CS_VERSION $ver"; exit 1; }
+          echo "VERSION=$ver" >>"$GITHUB_ENV"
+      - name: Build the release files (runtime only: bin, lib, launcher, README)
+        run: |
+          mkdir dist
+          name="claude-sync-$VERSION"
+          files="bin lib launcher README.md README.vi.md"
+          git archive --format=zip    --prefix="$name/" -o "dist/$name.zip"    HEAD $files
+          git archive --format=tar.gz --prefix="$name/" -o "dist/$name.tar.gz" HEAD $files
+          (cd dist && sha256sum "$name.zip" "$name.tar.gz" >SHA256SUMS && cat SHA256SUMS)
+      - name: Smoke test the tar.gz (unpack, install into an empty HOME, delete the unpacked copy, run the shim)
+        run: |
+          name="claude-sync-$VERSION"
+          work=$(mktemp -d)
+          tar -xzf "dist/$name.tar.gz" -C "$work"
+          HOME="$work/home" CLAUDE_SYNC_HOME="$work/home/.claude-sync" bash "$work/$name/bin/claude-sync" install
+          rm -rf "$work/$name"
+          out=$(HOME="$work/home" CLAUDE_SYNC_HOME="$work/home/.claude-sync" "$work/home/.local/bin/claude-sync" --version)
+          echo "$out"
+          [ "$out" = "claude-sync $VERSION" ]
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          flags=()
+          case "$VERSION" in *-*) flags+=(--prerelease) ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* --title "claude-sync $VERSION" --generate-notes "${flags[@]}"

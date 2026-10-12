@@ -55,7 +55,7 @@ cs_install() {
   cs_say install.shim "$dir/claude-sync"
   case ":$PATH:" in
     *":$dir:"*) ;;
-    *) cs_say install.path_hint "$dir" ;;
+    *) cs_say install.path_hint "$dir" "$dir" ;;
   esac
   cs_say install.next
 }

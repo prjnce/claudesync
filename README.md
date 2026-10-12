@@ -60,15 +60,22 @@ Both `gawk` and `mawk` work. WSL counts as a separate machine.
 
 ## Install
 
-There is no installer yet. Clone the repository and run the entry point directly:
+Download `claude-sync-<version>.zip` (or `.tar.gz`) from the
+[Releases](https://github.com/prjnce/claudesync/releases) page, unpack it anywhere, and run:
 
 ```bash
-git clone https://github.com/prjnce/claudesync.git
-cd claudesync
-bash bin/claude-sync --version
+cd claude-sync-<version>
+bash bin/claude-sync install     # copies the program to ~/.claude-sync/app and creates the claude-sync command
+claude-sync --version
 ```
 
-Optionally put `bin/` on your `PATH` or create an alias.
+After `install` you can delete the unpacked folder: the service and the hooks use the copy in
+`~/.claude-sync/app`. To upgrade, unpack the newer release and run `bash bin/claude-sync install` again.
+If the command is not found, add the directory that `install` prints to your `PATH`
+(`~/.local/bin` on Linux/WSL, `~/bin` in Git Bash). `SHA256SUMS` on the release page lets you check the download.
+
+Developers can instead `git clone https://github.com/prjnce/claudesync.git` and run `bash bin/claude-sync` from the
+clone; the service then runs from the clone, so keep it where it is.
 
 ## One-time: create a Google OAuth client
 
@@ -97,7 +104,7 @@ Keep the JSON out of version control (this repository's `.gitignore` already ign
 ```bash
 # 1. The whole wizard: language, OAuth client, proxy, Google sign-in, root folder, machine name,
 #    transcript check, project selection, retention, service, hooks and the first sync
-bash bin/claude-sync setup
+claude-sync setup
 
 # 2. Optional: catch up before every Claude start (add to your shell profile)
 alias claude='claude-sync claude'
@@ -115,6 +122,7 @@ until you pick its folder here (`claude-sync projects map`); it is never mapped 
 
 | Command | What it does |
 |---|---|
+| `install` | Copy the release to `~/.claude-sync/app` and create the `claude-sync` command (re-run to upgrade). |
 | `setup [--step NAME]` | Wizard (re-runnable): steps 0–10 as above. |
 | `login [--client FILE]` / `logout` | Sign in to Google Drive / revoke the token. |
 | `folder [show]` | Account, root folder link and the machines that joined. |

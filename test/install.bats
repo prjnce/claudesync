@@ -76,4 +76,5 @@ inst() { bash "$SRC/bin/claude-sync" install "$@"; }
   run inst
   [ "$status" -eq 0 ]
   [[ $output == *"not in your PATH"* ]]
+  [[ $output == *"export PATH=\"$HOME/.local/bin:"* ]]
 }

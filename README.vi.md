@@ -59,15 +59,22 @@ Chạy được với cả `gawk` lẫn `mawk`. WSL được tính là một má
 
 ## Cài đặt
 
-Chưa có trình cài đặt. Clone repo rồi chạy thẳng entry point:
+Tải `claude-sync-<phiên bản>.zip` (hoặc `.tar.gz`) ở trang
+[Releases](https://github.com/prjnce/claudesync/releases), giải nén vào thư mục bất kỳ rồi chạy:
 
 ```bash
-git clone https://github.com/prjnce/claudesync.git
-cd claudesync
-bash bin/claude-sync --version
+cd claude-sync-<phiên bản>
+bash bin/claude-sync install     # chép chương trình vào ~/.claude-sync/app và tạo lệnh claude-sync
+claude-sync --version
 ```
 
-Có thể thêm `bin/` vào `PATH` hoặc đặt alias.
+Sau `install` có thể xoá thư mục vừa giải nén: service và hook dùng bản chép trong `~/.claude-sync/app`.
+Muốn nâng cấp thì giải nén bản mới hơn và chạy lại `bash bin/claude-sync install`. Nếu không gọi được lệnh,
+thêm thư mục mà `install` in ra vào `PATH` (`~/.local/bin` trên Linux/WSL, `~/bin` trong Git Bash).
+File `SHA256SUMS` trên trang release dùng để kiểm tra bản tải về.
+
+Người phát triển có thể `git clone https://github.com/prjnce/claudesync.git` rồi chạy `bash bin/claude-sync` ngay
+trong bản clone; khi đó service chạy từ chính bản clone nên đừng di chuyển hay xoá nó.
 
 ## Làm một lần: tạo Google OAuth client
 
@@ -95,7 +102,7 @@ rồi chép cùng file JSON sang mọi máy.
 ```bash
 # 1. Toàn bộ wizard: ngôn ngữ, OAuth client, proxy, đăng nhập Google, folder gốc, tên máy,
 #    kiểm tra transcript, chọn project, retention, service, hook và lần sync đầu
-bash bin/claude-sync setup
+claude-sync setup
 
 # 2. Tuỳ chọn: bắt kịp trước mỗi lần mở Claude (thêm vào profile shell)
 alias claude='claude-sync claude'
@@ -113,6 +120,7 @@ khác tự tìm thấy. Project mà máy khác đang sync sẽ chờ cho đến 
 
 | Lệnh | Làm gì |
 |---|---|
+| `install` | Chép bản phát hành vào `~/.claude-sync/app` và tạo lệnh `claude-sync` (chạy lại để nâng cấp). |
 | `setup [--step TÊN]` | Wizard (chạy lại được): bước 0–10 như trên. |
 | `login [--client FILE]` / `logout` | Đăng nhập Google Drive / thu hồi token. |
 | `folder [show]` | Tài khoản, link folder gốc và các máy đã tham gia. |
