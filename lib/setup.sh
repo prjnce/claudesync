@@ -209,7 +209,10 @@ cs_setup_step_finish() {
   cs_heading setup.h_finish
   local iv
   iv=$(cs_ask setup.ask_interval "$(cs_config_get interval 5)")
-  [[ $iv == 5 || $iv == 10 ]] || iv=5
+  if cs_interval_ok "$iv"; then iv=$((10#$iv)); else
+    cs_say setup.bad_interval "$iv" >&2
+    iv=5
+  fi
   cs_config_set interval "$iv"
   cs_sched_install || cs_say setup.service_failed >&2
   cs_hooks_install

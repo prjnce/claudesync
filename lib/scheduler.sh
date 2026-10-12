@@ -26,21 +26,35 @@ Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=%t/bus
 EOF
 }
 
-# cs_sched_timer_text MINUTES
+# cs_sched_timer_text MINUTES (1..1440): a calendar line when MINUTES divides an hour evenly (so runs fall on the
+# same minutes every hour and Persistent= catches up after power-off), else a fixed delay after the last run.
 cs_sched_timer_text() {
+  local n=$1 sched persistent=''
+  if ((n <= 60 && 60 % n == 0)); then
+    sched="OnCalendar=*:0/$n"
+    persistent='Persistent=true'
+  else
+    sched="OnUnitActiveSec=${n}min"
+  fi
   cat <<EOF
+# claude-sync interval=$n
 [Unit]
-Description=claude-sync every $1 min (catch-up after power-off/suspend)
+Description=claude-sync every $n min (catch-up after power-off/suspend)
 
 [Timer]
-OnCalendar=*:0/$1
-Persistent=true
-OnStartupSec=30
+$sched
+${persistent:+$persistent
+}OnStartupSec=30
 AccuracySec=30s
 
 [Install]
 WantedBy=timers.target
 EOF
+}
+
+# cs_interval_ok VALUE: rc 0 for a whole number of minutes from 1 to 1440.
+cs_interval_ok() {
+  [[ $1 =~ ^[0-9]+$ ]] && ((10#$1 >= 1 && 10#$1 <= 1440))
 }
 
 # cs_sched_systemd_ok: a systemd user instance is reachable (not in a container or a WSL without systemd).
@@ -139,7 +153,7 @@ cs_sched_status() {
     cs_say service.no_systemd >&2
     return 1
   fi
-  cs_say service.interval "$(sed -n 's/^OnCalendar=\*:0\///p' "$d/claude-sync.timer")"
+  cs_say service.interval "$(sed -n 's/^# claude-sync interval=//p' "$d/claude-sync.timer")"
   cs_say service.timer_state "$(systemctl --user is-active claude-sync.timer 2>/dev/null || echo inactive)" \
     "$(systemctl --user is-enabled claude-sync.timer 2>/dev/null || echo disabled)"
   systemctl --user list-timers claude-sync.timer --no-pager 2>/dev/null | sed -n '1,2p'

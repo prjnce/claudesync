@@ -45,6 +45,8 @@ xml() {
   [[ $output == *'run --trigger=task'* ]]
   run xml 10
   [[ $output == *'<Interval>PT10M</Interval>'* ]]
+  run xml 7
+  [[ $output == *'<Interval>PT7M</Interval>'* ]]
   [[ $output != *'PT5M</Interval>'* ]]
 }
 

@@ -64,10 +64,32 @@ svc() { bash "$CS_ROOT/bin/claude-sync" service "$@"; }
   [ "$(grep -c 'OnCalendar' "$HOME/.config/systemd/user/claude-sync.timer")" -eq 1 ]
   grep -q 'daemon-reload' "$CALLS"
   grep -q 'restart claude-sync.timer' "$CALLS"
-  run bash "$CS_ROOT/bin/claude-sync" config set interval 7
-  [ "$status" -eq 2 ]
+  for bad in 0 1441 abc 5.5 -3; do
+    run bash "$CS_ROOT/bin/claude-sync" config set interval "$bad"
+    [ "$status" -eq 2 ]
+  done
   run bash "$CS_ROOT/bin/claude-sync" config get interval
   [ "$output" = 10 ]
+}
+
+@test "any interval from 1 to 1440 minutes: calendar line when it divides the hour, a fixed delay otherwise" {
+  svc install >/dev/null
+  t="$HOME/.config/systemd/user/claude-sync.timer"
+  bash "$CS_ROOT/bin/claude-sync" config set interval 7 >/dev/null
+  grep -qxF 'OnUnitActiveSec=7min' "$t"
+  ! grep -q 'OnCalendar' "$t"
+  grep -qxF 'OnStartupSec=30' "$t"
+  run svc status
+  [[ $output == *'every 7 min'* ]]
+  bash "$CS_ROOT/bin/claude-sync" config set interval 15 >/dev/null
+  grep -qxF 'OnCalendar=*:0/15' "$t"
+  grep -qxF 'Persistent=true' "$t"
+  ! grep -q 'OnUnitActiveSec' "$t"
+  bash "$CS_ROOT/bin/claude-sync" config set interval 090 >/dev/null
+  grep -qxF 'OnUnitActiveSec=90min' "$t"
+  bash "$CS_ROOT/bin/claude-sync" config set interval 1440 >/dev/null
+  grep -qxF 'OnUnitActiveSec=1440min' "$t"
+  [ "$(bash "$CS_ROOT/bin/claude-sync" config get interval)" = 1440 ]
 }
 
 @test "kick returns at once, does not wait for a running service, and leaves the pending mark (F10)" {

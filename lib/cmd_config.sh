@@ -7,7 +7,7 @@ CS_CMD_CONFIG_LOADED=1
 # The keys a user may set, with their allowed values (a regex) and defaults.
 cs_config_spec() { # KEY -> "regex<TAB>default" (rc 1 for an unknown key)
   case $1 in
-    interval) printf '^(5|10)$\t5\n' ;;
+    interval) printf '^[0-9]+$\t5\n' ;; # 1..1440 minutes, checked by cs_interval_ok
     guard) printf '^(block|warn|off)$\tblock\n' ;;
     throttle_live_min) printf '^[0-9]+$\t15\n' ;;
     lang) printf '^(en|vi)$\ten\n' ;;
@@ -42,6 +42,10 @@ cmd_config() {
       spec=$(cs_config_spec "$key") || cs_die_t "$CS_EXIT_USAGE" config.unknown_key "$key"
       IFS=$'\t' read -r re _ <<<"$spec"
       [[ $val =~ $re ]] || cs_die_t "$CS_EXIT_USAGE" config.bad_value "$val" "$key"
+      if [[ $key == interval ]]; then
+        cs_interval_ok "$val" || cs_die_t "$CS_EXIT_USAGE" config.bad_value "$val" "$key"
+        val=$((10#$val))
+      fi
       cs_config_set "$key" "$val"
       [[ $key == interval ]] && cs_sched_set_interval "$val"
       cs_say config.set "$key" "$val"

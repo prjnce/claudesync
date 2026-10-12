@@ -126,7 +126,7 @@ until you pick its folder here (`claude-sync projects map`); it is never mapped 
 | `restore <sid>` | Install a session from Drive that retention removed here. |
 | `service install\|uninstall\|status\|kick` | systemd user timer (Linux/WSL) or Task Scheduler task + hidden launcher (Windows). |
 | `hooks install\|uninstall` | Claude Code hooks: notices at session start, a guard against typing into a stale session, a kick at session end. |
-| `config get\|set <key> <value>` | `interval` 5\|10, `guard` block\|warn\|off, `throttle_live_min`, `lang`, `mode`, `scan_dirs`, `wsl_distro`/`wsl_user`. |
+| `config get\|set <key> <value>` | `interval` minutes (1–1440), `guard` block\|warn\|off, `throttle_live_min`, `lang`, `mode`, `scan_dirs`, `wsl_distro`/`wsl_user`. |
 | `machines [list\|forget <name>]` | Machines on Drive; `forget` keeps any version that exists nowhere else. |
 | `doctor` | Dependencies, login, Drive root, service, launcher, hooks, retention, duplicate ids, junk folders, unknown Claude layouts. |
 | `repair [--dry-run] [--yes] [--project X]` | Fix legacy transcripts (CRLF, re-serialized JSON, WSL/Windows paths, stray backup folders). |

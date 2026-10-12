@@ -124,7 +124,7 @@ khác tự tìm thấy. Project mà máy khác đang sync sẽ chờ cho đến 
 | `restore <sid>` | Cài lại session trên Drive mà retention đã xoá ở máy này. |
 | `service install\|uninstall\|status\|kick` | systemd user timer (Linux/WSL) hoặc Task Scheduler + launcher ẩn (Windows). |
 | `hooks install\|uninstall` | Hook Claude Code: thông báo lúc mở session, chặn gõ vào session cũ, đánh thức sync khi đóng session. |
-| `config get\|set <khoá> <giá trị>` | `interval` 5\|10, `guard` block\|warn\|off, `throttle_live_min`, `lang`, `mode`, `scan_dirs`, `wsl_distro`/`wsl_user`. |
+| `config get\|set <khoá> <giá trị>` | `interval` số phút (1–1440), `guard` block\|warn\|off, `throttle_live_min`, `lang`, `mode`, `scan_dirs`, `wsl_distro`/`wsl_user`. |
 | `machines [list\|forget <tên>]` | Các máy trên Drive; `forget` giữ lại mọi version không có ở nơi nào khác. |
 | `doctor` | Phụ thuộc, đăng nhập, folder gốc Drive, service, launcher, hook, retention, ID trùng, thư mục rác, cấu trúc Claude lạ. |
 | `repair [--dry-run] [--yes] [--project X]` | Sửa transcript cũ (CRLF, JSON bị serialize lại, path WSL/Windows, thư mục backup lạc). |
