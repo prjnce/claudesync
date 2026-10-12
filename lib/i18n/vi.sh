@@ -5,6 +5,7 @@
 declare -gA CS_MSG_vi=(
   [usage]='cách dùng: claude-sync <lệnh> [tham số]
 
+  install                       chép bản này vào ~/.claude-sync/app và tạo lệnh claude-sync
   setup                         trình cài đặt đầy đủ (chạy lại được)
   login | logout                đăng nhập / thu hồi quyền truy cập Google Drive
   google [guide|client <json>|status]  OAuth client Google của bạn: hướng dẫn, cài, trạng thái Publish
@@ -255,6 +256,13 @@ Sau đó:  claude-sync google client [file.json đã tải]   (không có file t
   [uninstall.refuse]='Từ chối xoá %s.'
   [uninstall.purged]='Đã xoá %s.'
   [uninstall.done]='Đã gỡ claude-sync.'
+  [install.already]='Đang chạy từ %s; không cần chép.'
+  [install.copied]='Đã cài claude-sync %s vào %s.'
+  [install.shim]='Đã tạo lệnh: %s'
+  [install.path_hint]='%s chưa nằm trong PATH. Hãy thêm vào (ví dụ export PATH="%s:$PATH" trong profile shell), hoặc gọi lệnh bằng đường dẫn đầy đủ.'
+  [install.next]='Tiếp theo: claude-sync setup'
+  [install.copy_failed]='Không cài được vào %s (bản cũ vẫn được giữ).'
+  [install.in_use]='Không thay được %s: một lần chạy claude-sync đang dùng nó. Thử lại sau một phút.'
   [wrapper.ask_map]='Thư mục này có phải project %s trên %s không? [y/N/skip]'
   [wrapper.login]='claude-sync: cần đăng nhập Google nên thư mục này chưa được cập nhật. Vẫn mở Claude.'
   [wrapper.offline]='claude-sync: đang offline nên thư mục này chưa được cập nhật. Vẫn mở Claude.'

@@ -5,6 +5,7 @@
 declare -gA CS_MSG_en=(
   [usage]='usage: claude-sync <command> [args]
 
+  install                       copy this release to ~/.claude-sync/app and create the claude-sync command
   setup                         full setup wizard (re-runnable)
   login | logout                sign in to / revoke Google Drive access
   google [guide|client <json>|status]  your Google OAuth client: steps, install, publishing status
@@ -255,6 +256,13 @@ No "Testing" warning at sign-in means the app is published. Copy the same JSON t
   [uninstall.refuse]='Refusing to delete %s.'
   [uninstall.purged]='Deleted %s.'
   [uninstall.done]='claude-sync was uninstalled.'
+  [install.already]='Already running from %s; nothing to copy.'
+  [install.copied]='claude-sync %s installed to %s.'
+  [install.shim]='Command written: %s'
+  [install.path_hint]='%s is not in your PATH. Add it (e.g. export PATH="%s:$PATH" in your shell profile), or run the command by its full path.'
+  [install.next]='Next: claude-sync setup'
+  [install.copy_failed]='Could not install into %s (the previous copy is kept).'
+  [install.in_use]='Could not replace %s: a claude-sync run is using it. Try again in a minute.'
   [wrapper.ask_map]='Is this folder the project %s from %s? [y/N/skip]'
   [wrapper.login]='claude-sync: Google login required, so this folder was not brought up to date. Opening Claude anyway.'
   [wrapper.offline]='claude-sync: offline, so this folder was not brought up to date. Opening Claude anyway.'

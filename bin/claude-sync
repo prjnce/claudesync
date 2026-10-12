@@ -131,6 +131,11 @@ main() {
       cs_bootstrap
       cmd_setup "$@"
       ;;
+    install)
+      cs_bootstrap
+      cs_use platform version store scheduler ui install
+      cs_install "$@"
+      ;;
     google)
       cs_bootstrap
       cs_use platform version store drive ui cmd_google
