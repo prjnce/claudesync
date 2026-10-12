@@ -148,6 +148,7 @@ declare -gA CS_MSG_en=(
   [engine.busy]='Another claude-sync run is in progress; nothing to do.'
   [engine.root_missing]='The root folder on Google Drive is missing or in the trash (ROOT_MISSING); nothing was synced.'
   [engine.summary]='Sync done: %s installed, %s published.'
+  [engine.waiting_network]='No network yet: waiting up to %s s for it before syncing...'
   [google.ask_id]='Client ID (ends with .apps.googleusercontent.com)'
   [google.ask_secret]='Client secret (typing is hidden)'
   [auth.bad_client_id]='"%s" is not a Google OAuth Client ID (expected 123456789012-abc....apps.googleusercontent.com)'

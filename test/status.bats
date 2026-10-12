@@ -133,3 +133,26 @@ state_of() { jq -r .state "$SIM/$1/home/.claude-sync/state/status.json" | tr -d 
   run sim_exec A 'CS_DRIVE_BACKEND=gdrive; nat() { echo 204; }; cs_eng_online_gate'
   [ "$status" -eq 0 ]
 }
+
+@test "offline gate: a reachable network passes on every platform (curl is called directly, never through nat)" {
+  mkdir -p "$BATS_TEST_TMPDIR/curlstub"
+  printf '#!/usr/bin/env bash
+echo 204
+' >"$BATS_TEST_TMPDIR/curlstub/curl"
+  chmod +x "$BATS_TEST_TMPDIR/curlstub/curl"
+  run sim_exec A 'PATH="$1:$PATH"; CS_DRIVE_BACKEND=gdrive; cs_eng_online_gate; echo "rc=$?"' "$BATS_TEST_TMPDIR/curlstub"
+  [ "$output" = rc=0 ]
+}
+
+@test "offline gate: when the network never comes it says so once and gives up within the budget" {
+  mkdir -p "$BATS_TEST_TMPDIR/curlstub"
+  printf '#!/usr/bin/env bash
+echo 000
+exit 7
+' >"$BATS_TEST_TMPDIR/curlstub/curl"
+  chmod +x "$BATS_TEST_TMPDIR/curlstub/curl"
+  run sim_exec A 'PATH="$1:$PATH"; CS_DRIVE_BACKEND=gdrive CS_OFFLINE_BUDGET=2 CS_OFFLINE_DELAY0=1 cs_eng_online_gate 2>&1; echo "rc=$?"' "$BATS_TEST_TMPDIR/curlstub"
+  [[ $output == *'No network yet'* ]]
+  [[ $output == *rc=1 ]]
+  [ "$(grep -c 'No network yet' <<<"$output")" -eq 1 ]
+}

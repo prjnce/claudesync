@@ -148,6 +148,7 @@ declare -gA CS_MSG_vi=(
   [engine.busy]='Đang có một lần chạy claude-sync khác; không làm gì thêm.'
   [engine.root_missing]='Folder gốc trên Google Drive không còn hoặc đang ở thùng rác (ROOT_MISSING); chưa sync gì.'
   [engine.summary]='Sync xong: cài %s, công bố %s.'
+  [engine.waiting_network]='Chưa có mạng: đợi tối đa %s giây trước khi sync...'
   [google.ask_id]='Client ID (kết thúc bằng .apps.googleusercontent.com)'
   [google.ask_secret]='Client secret (không hiện khi gõ)'
   [auth.bad_client_id]='"%s" không phải Client ID của Google OAuth (dạng 123456789012-abc....apps.googleusercontent.com)'

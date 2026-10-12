@@ -218,7 +218,8 @@ cs_setup_step_finish() {
   cs_hooks_install
   cs_doctor || true
   cs_say setup.first_sync
-  CS_VERBOSE=1 CS_SOFT_DEADLINE=86400 cs_run || cs_say setup.first_sync_failed >&2
+  # a person is watching: do not wait half an hour for the network, say so after a short while
+  CS_VERBOSE=1 CS_SOFT_DEADLINE=86400 CS_OFFLINE_BUDGET=${CS_OFFLINE_BUDGET:-30} cs_run || cs_say setup.first_sync_failed >&2
   cs_say setup.alias_hint
 }
 

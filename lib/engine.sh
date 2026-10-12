@@ -648,10 +648,17 @@ cs_eng_online_gate() {
   local url=${CS_PROBE_URL:-https://clients3.google.com/generate_204} budget=${CS_OFFLINE_BUDGET:-1800}
   local delay=${CS_OFFLINE_DELAY0:-5} cap=300 waited=0 code
   if [[ $CS_TRIGGER == resume || $CS_TRIGGER == logon ]] || (($(cs_uptime_s) < 300)); then cap=30; fi
+  local told=0
   while :; do
-    code=$(nat curl -s -m 3 -o /dev/null -w '%{http_code}' "$url" 2>/dev/null) || code=000
+    # plain curl: `nat` refuses the POSIX path /dev/null on Git Bash, which made every probe look "offline"
+    code=$(curl -s -m 3 -o /dev/null -w '%{http_code}' "$url" 2>/dev/null) || code=000
     [[ $code == 204 || $code == 200 ]] && return 0
     ((waited + 1 > budget)) && return 1
+    if ((!told)); then
+      told=1
+      cs_say engine.waiting_network "$budget" >&2
+      cs_log info "run: no network yet; waiting up to $budget s"
+    fi
     sleep "$delay"
     waited=$((waited + ${delay%.*} + 1))
     delay=$((${delay%.*} * 2))
