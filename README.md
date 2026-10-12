@@ -86,7 +86,7 @@ the same JSON file to every machine.
    files it created).
 6. **Clients → Create client → Desktop app**, and download the JSON right away.
 
-`claude-sync google guide` prints these steps at any time; `claude-sync google client <file.json>` installs the
+`claude-sync google guide` prints these steps at any time; `claude-sync google client [file.json]` installs the
 JSON and `claude-sync google status` shows whether the app was published (no *Testing* warning at sign-in).
 
 Keep the JSON out of version control (this repository's `.gitignore` already ignores

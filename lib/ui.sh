@@ -21,6 +21,17 @@ cs_ask() {
   printf '%s\n' "${ans:-$def}"
 }
 
+# cs_ask_secret KEY [ARGS...]: like cs_ask without a default, and the answer is not echoed on a terminal.
+cs_ask_secret() {
+  local key=$1 ans=''
+  shift
+  printf '%s: ' "$(cs_t "$key" "$@")" >&2
+  IFS= read -r -s ans || ans=
+  ans=${ans%$'\r'}
+  printf '\n' >&2
+  printf '%s\n' "$ans"
+}
+
 # cs_confirm KEY DEFAULT(y|n) [ARGS...]: yes/no question; rc 0 = yes. Accepts y/yes/c/có and n/no/k/không.
 cs_confirm() {
   local key=$1 def=$2 ans

@@ -82,7 +82,7 @@ declare -gA CS_MSG_vi=(
   4. Audience: External -> thêm chính bạn làm test user -> PUBLISH APP (nếu không, đăng nhập hết hạn sau 7 ngày).
   5. Data access: thêm scope .../auth/drive.file.
   6. Clients -> Create client -> Desktop app -> tải file JSON ngay.'
-  [setup.ask_client_path]='Đường dẫn tới file JSON client đã tải'
+  [setup.ask_client_path]='Đường dẫn tới file JSON client đã tải (hoặc nhấn Enter để gõ Client ID và secret)'
   [setup.h_proxy]='Bước 3 - Proxy'
   [setup.ask_proxy]='HTTPS proxy để gọi Google API ("-" nếu không dùng)'
   [setup.h_login]='Bước 4 - Đăng nhập Google Drive'
@@ -148,6 +148,10 @@ declare -gA CS_MSG_vi=(
   [engine.busy]='Đang có một lần chạy claude-sync khác; không làm gì thêm.'
   [engine.root_missing]='Folder gốc trên Google Drive không còn hoặc đang ở thùng rác (ROOT_MISSING); chưa sync gì.'
   [engine.summary]='Sync xong: cài %s, công bố %s.'
+  [google.ask_id]='Client ID (kết thúc bằng .apps.googleusercontent.com)'
+  [google.ask_secret]='Client secret (không hiện khi gõ)'
+  [auth.bad_client_id]='"%s" không phải Client ID của Google OAuth (dạng 123456789012-abc....apps.googleusercontent.com)'
+  [auth.bad_client_secret]='Client secret trống hoặc có khoảng trắng'
   [google.guide]='Tạo một OAuth client Google của riêng bạn (một lần), rồi dùng cùng file JSON trên mọi máy của bạn:
   1. https://console.cloud.google.com -> tạo project, ví dụ "claude-sync".
   2. APIs & Services -> Library -> bật "Google Drive API".
@@ -161,9 +165,9 @@ declare -gA CS_MSG_vi=(
   5. Data access -> thêm scope  https://www.googleapis.com/auth/drive.file  (scope duy nhất claude-sync dùng:
      chỉ thấy file do chính nó tạo).
   6. Clients -> Create client -> loại "Desktop app" -> TẢI JSON NGAY (secret chỉ hiện một lần).
-Sau đó:  claude-sync google client <file.json đã tải>   rồi   claude-sync login
+Sau đó:  claude-sync google client [file.json đã tải]   (không có file thì gõ Client ID và secret)   rồi   claude-sync login
 Đăng nhập mà không thấy cảnh báo "Testing" nghĩa là app đã được Publish. Chép cùng file JSON sang các máy khác của bạn; đừng chia sẻ token.'
-  [google.usage]='Cách dùng: claude-sync google [guide|client <file.json>|status]'
+  [google.usage]='Cách dùng: claude-sync google [guide|client [file.json]|status]'
   [google.client_installed]='Đã cài OAuth client: %s'
   [google.next_login]='Tiếp theo: claude-sync login  (client mới cần đăng nhập lại).'
   [google.no_client]='Chưa có OAuth client.'

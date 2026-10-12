@@ -62,6 +62,26 @@ cs_random_token() {
 
 # --- OAuth client JSON ------------------------------------------------------------------------------------
 
+# cs_client_install_ids ID SECRET [PROJECT_ID]: the same file as a downloaded JSON, from typed values.
+cs_client_install_ids() {
+  local id=$1 secret=$2 project=${3:-} tmp
+  [[ $id =~ ^[0-9]+-[A-Za-z0-9_]+\.apps\.googleusercontent\.com$ ]] || cs_die_t "$CS_EXIT_ERROR" auth.bad_client_id "$id"
+  [[ -n $secret && $secret != *[[:space:]]* ]] || cs_die_t "$CS_EXIT_ERROR" auth.bad_client_secret
+  tmp=$(mktemp "${TMPDIR:-/tmp}/cs-client.XXXXXX")
+  jq -n --arg id "$id" --arg s "$secret" --arg p "$project" \
+    '{installed: ({client_id: $id, client_secret: $s} + (if $p != "" then {project_id: $p} else {} end))}' | tr -d '\r' >"$tmp"
+  cs_client_install "$tmp"
+  rm -f -- "$tmp"
+}
+
+# cs_client_ask_ids: ask for the Client ID and secret on the screen and install them.
+cs_client_ask_ids() {
+  local id secret
+  id=$(cs_ask google.ask_id "")
+  secret=$(cs_ask_secret google.ask_secret)
+  cs_client_install_ids "$id" "$secret"
+}
+
 cs_client_file() {
   printf '%s\n' "$CS_HOME/oauth-client.json"
 }

@@ -85,7 +85,7 @@ rồi chép cùng file JSON sang mọi máy.
    chính nó tạo).
 6. **Clients → Create client → Desktop app**, rồi tải file JSON ngay.
 
-`claude-sync google guide` in lại các bước này bất cứ lúc nào; `claude-sync google client <file.json>` cài file JSON và
+`claude-sync google guide` in lại các bước này bất cứ lúc nào; `claude-sync google client [file.json]` cài file JSON (không có file thì gõ Client ID và secret trên màn hình) và
 `claude-sync google status` cho biết app đã Publish chưa (đăng nhập không còn cảnh báo *Testing*).
 
 Đừng đưa file JSON vào git (`.gitignore` của repo này đã bỏ qua `*client_secret*.json`).

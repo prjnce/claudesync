@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# cmd_google: `claude-sync google [guide|client <file>|status]` — the Google side of the setup, usable at any time
+# cmd_google: `claude-sync google [guide|client [file]|status]` — the Google side of the setup, usable at any time
 # (the wizard uses the same guide). Every user creates an OAuth client of their own; the same JSON goes to every
 # machine of that user. Requires core, platform, version, store, drive (auth), ui.
 
@@ -12,11 +12,14 @@ cmd_google() {
   case $sub in
     guide) cs_say google.guide ;;
     client)
-      [[ -n ${1:-} ]] || cs_die_t "$CS_EXIT_USAGE" google.usage
-      f=$1
-      [[ $CS_OS == windows && $f == [A-Za-z]:* ]] && f=$(cs_win_to_posix "$f")
-      [[ -f $f ]] || cs_die_t "$CS_EXIT_ERROR" auth.bad_client "$f"
-      cs_client_install "$f"
+      if [[ -n ${1:-} ]]; then
+        f=$1
+        [[ $CS_OS == windows && $f == [A-Za-z]:* ]] && f=$(cs_win_to_posix "$f")
+        [[ -f $f ]] || cs_die_t "$CS_EXIT_ERROR" auth.bad_client "$f"
+        cs_client_install "$f"
+      else
+        cs_client_ask_ids # no file: type the Client ID and the secret
+      fi
       rm -f -- "$CS_HOME/state/oauth_mode" # the new client has not been used to sign in yet
       cs_say google.client_installed "$(cs_client_file)"
       cs_say google.next_login

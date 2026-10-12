@@ -82,7 +82,7 @@ declare -gA CS_MSG_en=(
   4. Audience: External -> add yourself as a test user -> PUBLISH APP (otherwise sign-ins expire after 7 days).
   5. Data access: add the scope .../auth/drive.file.
   6. Clients -> Create client -> Desktop app -> download the JSON right away.'
-  [setup.ask_client_path]='Path to the downloaded client JSON'
+  [setup.ask_client_path]='Path to the downloaded client JSON (or press Enter to type the Client ID and secret instead)'
   [setup.h_proxy]='Step 3 - Proxy'
   [setup.ask_proxy]='HTTPS proxy for Google APIs ("-" for none)'
   [setup.h_login]='Step 4 - Sign in to Google Drive'
@@ -148,6 +148,10 @@ declare -gA CS_MSG_en=(
   [engine.busy]='Another claude-sync run is in progress; nothing to do.'
   [engine.root_missing]='The root folder on Google Drive is missing or in the trash (ROOT_MISSING); nothing was synced.'
   [engine.summary]='Sync done: %s installed, %s published.'
+  [google.ask_id]='Client ID (ends with .apps.googleusercontent.com)'
+  [google.ask_secret]='Client secret (typing is hidden)'
+  [auth.bad_client_id]='"%s" is not a Google OAuth Client ID (expected 123456789012-abc....apps.googleusercontent.com)'
+  [auth.bad_client_secret]='The client secret is empty or contains spaces'
   [google.guide]='Create your own Google OAuth client once, then use the same JSON on every machine of yours:
   1. https://console.cloud.google.com -> create a project, e.g. "claude-sync".
   2. APIs & Services -> Library -> enable "Google Drive API".
@@ -161,9 +165,9 @@ declare -gA CS_MSG_en=(
   5. Data access -> add the scope  https://www.googleapis.com/auth/drive.file  (the only scope claude-sync uses:
      it can see only the files it creates itself).
   6. Clients -> Create client -> type "Desktop app" -> DOWNLOAD THE JSON NOW (the secret is shown only once).
-Then:  claude-sync google client <downloaded.json>   and   claude-sync login
+Then:  claude-sync google client [downloaded.json]   (without a file you can type the Client ID and secret)   and   claude-sync login
 No "Testing" warning at sign-in means the app is published. Copy the same JSON to your other machines; never share the token.'
-  [google.usage]='Usage: claude-sync google [guide|client <file.json>|status]'
+  [google.usage]='Usage: claude-sync google [guide|client [file.json]|status]'
   [google.client_installed]='OAuth client installed: %s'
   [google.next_login]='Next: claude-sync login  (a new client needs a new sign-in).'
   [google.no_client]='No OAuth client yet.'

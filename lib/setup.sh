@@ -44,7 +44,14 @@ cs_setup_step_client() {
   while ((tries < 3)); do
     tries=$((tries + 1))
     path=$(cs_ask setup.ask_client_path "")
-    [[ -n $path ]] || continue
+    if [[ -z $path ]]; then
+      # no file: type the Client ID and the secret instead
+      if (cs_client_ask_ids); then
+        cs_say auth.client_installed "$f"
+        return 0
+      fi
+      continue
+    fi
     [[ $CS_OS == windows && $path == [A-Za-z]:* ]] && path=$(cs_win_to_posix "$path")
     if [[ -f $path ]] && jq -e '(.installed // .web) | .client_id and .client_secret' "$path" >/dev/null 2>&1; then
       cs_client_install "$path"
