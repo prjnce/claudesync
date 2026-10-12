@@ -76,12 +76,17 @@ rồi chép cùng file JSON sang mọi máy.
 
 1. Mở <https://console.cloud.google.com> và tạo project, ví dụ `claude-sync`.
 2. **APIs & Services** → bật **Google Drive API**.
-3. **Google Auth Platform → Branding**: tên app và email hỗ trợ.
+3. **Google Auth Platform → Branding**: tên app và email hỗ trợ, cùng các giá trị mặc định bên dưới (hoặc trang của riêng bạn):
+   trang chủ `https://transflow.asia/en`, chính sách riêng tư `https://transflow.asia/en/privacy`,
+   điều khoản `https://transflow.asia/en/terms`, tên miền được phép `transflow.asia`.
 4. **Audience**: *External*, thêm chính bạn làm test user, rồi **Publish app**. Khi app còn ở *Testing*,
    đăng nhập hết hạn sau 7 ngày.
 5. **Data access**: thêm scope `https://www.googleapis.com/auth/drive.file` (app chỉ thấy những file do
    chính nó tạo).
 6. **Clients → Create client → Desktop app**, rồi tải file JSON ngay.
+
+`claude-sync google guide` in lại các bước này bất cứ lúc nào; `claude-sync google client <file.json>` cài file JSON và
+`claude-sync google status` cho biết app đã Publish chưa (đăng nhập không còn cảnh báo *Testing*).
 
 Đừng đưa file JSON vào git (`.gitignore` của repo này đã bỏ qua `*client_secret*.json`).
 

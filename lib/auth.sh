@@ -205,8 +205,12 @@ cs_oauth_exchange() {
     cs_say auth.no_drive_scope >&2
     return "$CS_EXIT_LOGIN"
   fi
+  mkdir -p -- "$CS_HOME/state"
   if cs_jq -e '.refresh_token_expires_in' <<<"$body" >/dev/null 2>&1; then
     cs_say auth.testing_mode >&2
+    printf 'testing\n' >"$CS_HOME/state/oauth_mode" # `claude-sync google status` and doctor read this
+  else
+    printf 'production\n' >"$CS_HOME/state/oauth_mode"
   fi
   now=$(date +%s)
   cs_token_save "$(cs_token_from_response "$body" "$now")"

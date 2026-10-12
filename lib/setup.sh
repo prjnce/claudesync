@@ -39,7 +39,7 @@ cs_setup_step_client() {
     cs_say setup.client_have "${CS_CLIENT_ID:0:12}…"
     cs_confirm setup.ask_client_replace n || return 0
   else
-    cs_say setup.client_guide
+    cs_say google.guide
   fi
   while ((tries < 3)); do
     tries=$((tries + 1))

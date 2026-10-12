@@ -7,6 +7,7 @@ declare -gA CS_MSG_vi=(
 
   setup                         trình cài đặt đầy đủ (chạy lại được)
   login [--device] | logout     đăng nhập / thu hồi quyền truy cập Google Drive
+  google [guide|client <json>|status]  OAuth client Google của bạn: hướng dẫn, cài, trạng thái Publish
   folder [show]                 folder gốc, marker, các máy
   projects ...                  list|select|pending|map|unmap|mode|exclude
   sync [--pull-only|--push-only] [--project X] [--dry-run] [--verbose]
@@ -147,6 +148,33 @@ declare -gA CS_MSG_vi=(
   [engine.busy]='Đang có một lần chạy claude-sync khác; không làm gì thêm.'
   [engine.root_missing]='Folder gốc trên Google Drive không còn hoặc đang ở thùng rác (ROOT_MISSING); chưa sync gì.'
   [engine.summary]='Sync xong: cài %s, công bố %s.'
+  [google.guide]='Tạo một OAuth client Google của riêng bạn (một lần), rồi dùng cùng file JSON trên mọi máy của bạn:
+  1. https://console.cloud.google.com -> tạo project, ví dụ "claude-sync".
+  2. APIs & Services -> Library -> bật "Google Drive API".
+  3. Google Auth Platform -> Branding: tên app và email hỗ trợ, rồi điền các giá trị mặc định này:
+       Trang chủ app ........ https://transflow.asia/en
+       Chính sách riêng tư .. https://transflow.asia/en/privacy
+       Điều khoản dịch vụ ... https://transflow.asia/en/terms
+       Tên miền được phép ... transflow.asia
+     (Nếu Google đòi chứng minh bạn sở hữu tên miền đó thì dùng trang của riêng bạn.)
+  4. Audience: External -> PUBLISH APP ("In production"). Để Testing thì mỗi lần đăng nhập chỉ sống 7 ngày.
+  5. Data access -> thêm scope  https://www.googleapis.com/auth/drive.file  (scope duy nhất claude-sync dùng:
+     chỉ thấy file do chính nó tạo).
+  6. Clients -> Create client -> loại "Desktop app" -> TẢI JSON NGAY (secret chỉ hiện một lần).
+Sau đó:  claude-sync google client <file.json đã tải>   rồi   claude-sync login
+Đăng nhập mà không thấy cảnh báo "Testing" nghĩa là app đã được Publish. Chép cùng file JSON sang các máy khác của bạn; đừng chia sẻ token.'
+  [google.usage]='Cách dùng: claude-sync google [guide|client <file.json>|status]'
+  [google.client_installed]='Đã cài OAuth client: %s'
+  [google.next_login]='Tiếp theo: claude-sync login  (client mới cần đăng nhập lại).'
+  [google.no_client]='Chưa có OAuth client.'
+  [google.next_guide]='Chạy "claude-sync google guide" để xem các bước, rồi "claude-sync google client <file.json>".'
+  [google.client]='OAuth client: %s (project Google Cloud %s)'
+  [google.token_yes]='Đã đăng nhập: máy này đang lưu token.'
+  [google.token_no]='Chưa đăng nhập: chạy "claude-sync login".'
+  [google.mode_production]='App đã Publish (lần đăng nhập gần nhất nhận token dài hạn).'
+  [google.mode_testing]='App vẫn ở chế độ Testing: đăng nhập hết hạn sau 7 ngày. Hãy Publish (Google Auth Platform > Audience) rồi đăng nhập lại.'
+  [google.mode_unknown]='Chưa biết trạng thái Publish cho đến lần đăng nhập kế tiếp (claude-sync login sẽ cho biết).'
+  [doctor.oauth_testing]='app Google đang ở chế độ Testing: đăng nhập hết hạn sau 7 ngày (xem "claude-sync google guide")'
   [engine.unsupported_layout]='LỖI: cấu trúc Claude không được hỗ trợ (%s); chưa sync gì. Chạy "claude-sync doctor".'
   [doctor.layout_hover]='CLAUDE_CODE_HOVER_REST đang bật: cấu trúc thư mục mà claude-sync chưa biết'
   [doctor.layout_compact]='file tạm của compaction trong projects/ (cấu trúc claude-sync chưa biết): %s'

@@ -77,12 +77,17 @@ the same JSON file to every machine.
 
 1. Open <https://console.cloud.google.com> and create a project, e.g. `claude-sync`.
 2. **APIs & Services** → enable **Google Drive API**.
-3. **Google Auth Platform → Branding**: app name and support email.
+3. **Google Auth Platform → Branding**: app name and support email, plus the defaults below (or pages of your own):
+   home page `https://transflow.asia/en`, privacy policy `https://transflow.asia/en/privacy`,
+   terms of service `https://transflow.asia/en/terms`, authorized domain `transflow.asia`.
 4. **Audience**: *External*, add yourself as a test user, then **Publish app**. While the app is in
    *Testing*, sign-ins expire after 7 days.
 5. **Data access**: add the scope `https://www.googleapis.com/auth/drive.file` (the app can only see
    files it created).
 6. **Clients → Create client → Desktop app**, and download the JSON right away.
+
+`claude-sync google guide` prints these steps at any time; `claude-sync google client <file.json>` installs the
+JSON and `claude-sync google status` shows whether the app was published (no *Testing* warning at sign-in).
 
 Keep the JSON out of version control (this repository's `.gitignore` already ignores
 `*client_secret*.json`).

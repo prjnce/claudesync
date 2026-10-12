@@ -131,6 +131,11 @@ main() {
       cs_bootstrap
       cmd_setup "$@"
       ;;
+    google)
+      cs_bootstrap
+      cs_use platform version store drive ui cmd_google
+      cmd_google "$@"
+      ;;
     folder)
       cs_bootstrap
       cmd_folder "$@"

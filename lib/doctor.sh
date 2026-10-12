@@ -125,6 +125,10 @@ cs_doctor() {
       doctor_line WARN doctor.no_client
       problems=1
     fi
+    if [[ $(cat -- "$CS_HOME/state/oauth_mode" 2>/dev/null) == testing ]]; then
+      doctor_line WARN doctor.oauth_testing
+      problems=1
+    fi
     if cs_token_load >/dev/null 2>&1; then doctor_line OK doctor.token; else
       doctor_line WARN doctor.no_token
       problems=1

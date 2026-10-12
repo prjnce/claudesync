@@ -7,6 +7,7 @@ declare -gA CS_MSG_en=(
 
   setup                         full setup wizard (re-runnable)
   login [--device] | logout     sign in to / revoke Google Drive access
+  google [guide|client <json>|status]  your Google OAuth client: steps, install, publishing status
   folder [show]                 root folder, marker, machines
   projects ...                  list|select|pending|map|unmap|mode|exclude
   sync [--pull-only|--push-only] [--project X] [--dry-run] [--verbose]
@@ -147,6 +148,33 @@ declare -gA CS_MSG_en=(
   [engine.busy]='Another claude-sync run is in progress; nothing to do.'
   [engine.root_missing]='The root folder on Google Drive is missing or in the trash (ROOT_MISSING); nothing was synced.'
   [engine.summary]='Sync done: %s installed, %s published.'
+  [google.guide]='Create your own Google OAuth client once, then use the same JSON on every machine of yours:
+  1. https://console.cloud.google.com -> create a project, e.g. "claude-sync".
+  2. APIs & Services -> Library -> enable "Google Drive API".
+  3. Google Auth Platform -> Branding: app name and your support email, then these defaults:
+       App home page ........ https://transflow.asia/en
+       Privacy policy ....... https://transflow.asia/en/privacy
+       Terms of service ..... https://transflow.asia/en/terms
+       Authorized domains ... transflow.asia
+     (If Google insists on proof that you own that domain, use pages of your own instead.)
+  4. Audience: External -> PUBLISH APP ("In production"). If you leave it in Testing, every sign-in expires after 7 days.
+  5. Data access -> add the scope  https://www.googleapis.com/auth/drive.file  (the only scope claude-sync uses:
+     it can see only the files it creates itself).
+  6. Clients -> Create client -> type "Desktop app" -> DOWNLOAD THE JSON NOW (the secret is shown only once).
+Then:  claude-sync google client <downloaded.json>   and   claude-sync login
+No "Testing" warning at sign-in means the app is published. Copy the same JSON to your other machines; never share the token.'
+  [google.usage]='Usage: claude-sync google [guide|client <file.json>|status]'
+  [google.client_installed]='OAuth client installed: %s'
+  [google.next_login]='Next: claude-sync login  (a new client needs a new sign-in).'
+  [google.no_client]='No OAuth client yet.'
+  [google.next_guide]='Run "claude-sync google guide" for the steps, then "claude-sync google client <file.json>".'
+  [google.client]='OAuth client: %s (Google Cloud project %s)'
+  [google.token_yes]='Signed in: a login token is stored on this machine.'
+  [google.token_no]='Not signed in yet: run "claude-sync login".'
+  [google.mode_production]='The app is published (the last sign-in got a long-lived token).'
+  [google.mode_testing]='The app is still in Testing: sign-ins expire after 7 days. Publish it (Google Auth Platform > Audience) and sign in again.'
+  [google.mode_unknown]='Publishing status unknown until the next sign-in (claude-sync login tells).'
+  [doctor.oauth_testing]='the Google app is in Testing mode: the login expires after 7 days (see "claude-sync google guide")'
   [engine.unsupported_layout]='ERROR: unsupported Claude layout (%s); nothing was synced. Run "claude-sync doctor".'
   [doctor.layout_hover]='CLAUDE_CODE_HOVER_REST is set: an on-disk layout claude-sync does not know'
   [doctor.layout_compact]='compaction temp file in projects/ (a layout claude-sync does not know): %s'
