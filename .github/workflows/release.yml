@@ -21,7 +21,7 @@ jobs:
           echo "tag=$GITHUB_REF_NAME  CS_VERSION=$ver"
           [ "$GITHUB_REF_NAME" = "v$ver" ] || { echo "::error::tag $GITHUB_REF_NAME does not match CS_VERSION $ver"; exit 1; }
           echo "VERSION=$ver" >>"$GITHUB_ENV"
-      - name: Build the release files (runtime only: bin, lib, launcher, README)
+      - name: Build the release files (runtime only - bin, lib, launcher, README)
         run: |
           mkdir dist
           name="claude-sync-$VERSION"
