@@ -28,3 +28,12 @@ Spec: SPEC §17.2, §25 Q4, Q8; mẫu XML ở `docs/research/autostart-catchup.m
 - [ ] Gỡ task spike sau khi xong.
 
 ## Answer
+
+2026-10-12 (chạy trên máy này, task `claude-sync-spike` đã gỡ):
+
+- **Q4: không bị chặn.** Source là `launcher/launcher.cs`. `csc.exe -target:winexe` cho `launcher.exe` 7680 byte, không có chữ ký, chạy bình thường (AppIDSvc dừng, không có rule AppLocker).
+- Qua Task Scheduler: `Last Result` = 7 (đúng exit code của con); không có cửa sổ nào (`MainWindowHandle` = 0 cho launcher, cmd, ping); `schtasks /End` giết cả cây (không còn `launcher`/`ping`), `Last Result` = 267014 (bị dừng).
+- **Q8 (một phần): đăng ký được** bằng `schtasks /Create /XML` (UTF-16LE có BOM, user thường, không admin) với Logon + Time PT5M + EventTrigger Power-Troubleshooter 1 + EventTrigger NetworkProfile 10000. Lưu ý: `&`, `"`, `>` trong `<Arguments>` phải escape XML (nếu không `schtasks` báo "task XML is malformed"; `cs_xml_escape` trong `lib/sched_win.sh` đã làm việc này).
+- Máy này là Dell Vostro 3671, chế độ ngủ S3 (không phải Modern Standby). Nhật ký System có Power-Troubleshooter EventID 1 (gần nhất 2026-09-23 10:24, "returned from a low power state").
+- Fallback `wscript.exe run-hidden.vbs` (`Run cmd, 0, True` + `WScript.Quit rc`) trả exit code 7.
+- **Chưa làm (cần người):** cho máy sleep rồi thức dậy, xem task có tự chạy qua EventTrigger không (bước 5). Không tự làm vì sẽ ngắt phiên đang chạy.
