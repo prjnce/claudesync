@@ -287,7 +287,7 @@ cs_pend_status() {
 
 # cs_pend_list: what waits for a decision (decision = pending).
 cs_pend_list() {
-  local kind key alias machines roots sessions bytes first notified cands dec i c any=0
+  local kind key alias machines roots sessions bytes first notified cands dec i c reason any=0
   while IFS=$'\t' read -r kind key alias machines roots sessions bytes first notified cands dec; do
     [[ $dec == pending ]] || continue
     any=1
@@ -301,7 +301,10 @@ cs_pend_list() {
       local IFS=';'
       for c in $cands; do
         i=$((i + 1))
-        cs_say pending.cand "$i" "$(cs_pend_cand_show "$kind" "${c%%|*}")" "$(cs_t "pending.reason_${c#*|}" 2>/dev/null | head -n 1 || true)"
+        # a candidate is "target|reason|score"
+        reason=${c#*|}
+        reason=${reason%%|*}
+        cs_say pending.cand "$i" "$(cs_pend_cand_show "$kind" "${c%%|*}")" "$(cs_t "pending.reason_$reason" 2>/dev/null | head -n 1 || true)"
       done
     fi
   done < <(cs_tsv_rows pending_map)

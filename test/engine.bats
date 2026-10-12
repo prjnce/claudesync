@@ -431,3 +431,31 @@ a_move_to() {
   [[ $output != *'Publishing session'* ]]
   [[ $output == *'Sync done'* ]]
 }
+
+@test "an empty manifest.json is rebuilt (local bookkeeping forgotten), never published empty" {
+  sim_write A "$ASLUG" "$SID" "$(aline 1)" "$(aline 2)"
+  sim_run A >/dev/null
+  printf '\n' >"$SIM/A/home/.claude-sync/state/manifest.json"
+  run sim_run A
+  echo "$output"
+  [ "$status" -eq 0 ]
+  grep -q 'empty or damaged' "$SIM/A/home/.claude-sync/logs/claude-sync.log"
+  jq -e '.sessions | length == 1' "$SIM/A/home/.claude-sync/state/manifest.json"
+  run sim_run B
+  echo "$output"
+  [[ $output == *'1 installed'* ]]
+  [ "$(wc -l <"$SIM/B/claude/projects/$BSLUG/$SID.jsonl")" -eq 2 ]
+}
+
+@test "a damaged manifest is never uploaded" {
+  sim_write A "$ASLUG" "$SID" "$(aline 1)"
+  sim_run A >/dev/null
+  cs_load_core
+  for m in platform version manifest store claude transform projects drive root status engine; do source "$CS_ROOT/lib/$m.sh"; done
+  export CLAUDE_SYNC_HOME="$SIM/A/home/.claude-sync"
+  CS_HOME="$CLAUDE_SYNC_HOME"
+  cs_eng_my_manifest() { printf '\n'; }
+  run cs_eng_publish_manifest
+  [ "$status" -ne 0 ]
+  grep -q 'refused to publish' "$CLAUDE_SYNC_HOME/logs/claude-sync.log"
+}

@@ -52,9 +52,9 @@ cs_gc_run() {
 cs_machines_table() {
   local f
   f="$CS_HOME/state/manifest.json"
-  [[ -f $f ]] && cs_jq -r '[.machine_id, .name, .os, .updated, (.sessions | length | tostring)] | join("\t")' "$f"
+  [[ -f $f ]] && cs_jq -r '[.machine_id, .name, .os, ((.updated // "") | if . == "" then "-" else . end), (.sessions | length | tostring)] | join("\t")' "$f"
   for f in "$CS_HOME"/state/remote/*.json; do
-    [[ -f $f ]] && cs_jq -r '[.machine_id, .name, .os, .updated, (.sessions | length | tostring)] | join("\t")' "$f"
+    [[ -f $f ]] && cs_jq -r '[.machine_id, .name, .os, ((.updated // "") | if . == "" then "-" else . end), (.sessions | length | tostring)] | join("\t")' "$f"
   done
   return 0
 }

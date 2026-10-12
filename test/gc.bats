@@ -93,3 +93,13 @@ trashed() { jq -r --arg n "$1" 'select(.name == $n) | .trashed' "$SIM"/drive/obj
 @test "the code never empties the Drive trash" {
   ! grep -rniE 'emptytrash|empty_trash|trash/empty' "$CS_ROOT/lib" "$CS_ROOT/bin"
 }
+
+@test "machines table shows - for an empty updated field instead of shifting the columns" {
+  cs_load platform store gc
+  mkdir -p "$CS_HOME/state/remote"
+  printf '{"machine_id":"m1","name":"N","os":"windows","updated":"","sessions":{"a":{}}}
+' >"$CS_HOME/state/manifest.json"
+  run cs_machines_table
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(printf 'm1	N	windows	-	1')" ]
+}

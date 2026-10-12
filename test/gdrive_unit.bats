@@ -228,3 +228,20 @@ reqs() { grep -c '^[A-Z]' "$T/requests.log"; }
   drv_get_meta F >/dev/null
   ! grep -E '^[A-Z]+ .*AT1' "$T/requests.log"
 }
+
+@test "resumable upload with pipefail on (as in bin/claude-sync): every chunk of a big file succeeds on the first try" {
+  # tail is cut off by head, which gave the chunk the status 141 (SIGPIPE) and so the code 000: each chunk then needed
+  # a status query and a backoff, and a file of more than CS_GD_RETRIES+1 chunks (about 25 MB) was never uploaded
+  set -o pipefail
+  local k size=$((262144 * 8 + 1000))
+  head -c "$size" /dev/urandom >"$T/big"
+  md5=$(md5sum "$T/big" | cut -d' ' -f1)
+  export CS_GD_MULTIPART_MAX=100 CS_GD_CHUNK=262144
+  respond 200 '' 'Location: https://upload.example/session1'
+  for k in 1 2 3 4 5 6 7 8; do respond 308 '' "Range: bytes=0-$((262144 * k - 1))"; done
+  respond 200 "{\"id\":\"R1\",\"name\":\"big\",\"mimeType\":\"m\",\"parents\":[\"P\"],\"md5Checksum\":\"$md5\",\"size\":\"$size\"}"
+  m=$(drv_upload P big "$T/big" '{}')
+  [ "$(cs_jq -r .id <<<"$m")" = R1 ]
+  [ "$(grep -c 'Content-Range: bytes [*]/' "$T/requests.log")" -eq 0 ]
+  [ "$(grep -c '^PUT' "$T/requests.log")" -eq 9 ]
+}

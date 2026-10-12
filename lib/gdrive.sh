@@ -284,10 +284,15 @@ cs_gd_put_chunk() {
       -w '%{http_code}' "$uri" 2>"$dir/err"
   else
     range="bytes $off-$((off + n - 1))/$size"
-    tail -c +$((off + 1)) -- "$file" | head -c "$n" |
-      nat curl -sS --connect-timeout 10 --max-time "${CS_GD_MAX_TIME:-300}" -X PUT \
-        -H "Authorization: Bearer $CS_ACCESS_TOKEN" -H "Content-Range: $range" -H 'Content-Type: application/octet-stream' \
-        --data-binary @- -D "$(cs_to_win "$dir/hdr")" -o "$(cs_to_win "$dir/body")" -w '%{http_code}' "$uri" 2>"$dir/err"
+    # head cuts tail off: with pipefail (bin/claude-sync) that is status 141 for every chunk but the last, which the
+    # caller read as a failed chunk; the status of this function must be curl's alone
+    (
+      set +o pipefail
+      tail -c +$((off + 1)) -- "$file" | head -c "$n" |
+        nat curl -sS --connect-timeout 10 --max-time "${CS_GD_MAX_TIME:-300}" -X PUT \
+          -H "Authorization: Bearer $CS_ACCESS_TOKEN" -H "Content-Range: $range" -H 'Content-Type: application/octet-stream' \
+          --data-binary @- -D "$(cs_to_win "$dir/hdr")" -o "$(cs_to_win "$dir/body")" -w '%{http_code}' "$uri" 2>"$dir/err"
+    )
   fi
 }
 

@@ -31,8 +31,27 @@ cs_short_sid() { printf '%s\n' "${1:0:8}"; }
 
 # --- context ---------------------------------------------------------------------------------------------
 
+# cs_eng_manifest_ok JSON: rc 0 for a manifest we can work with (an object with "sessions"). An empty string or a
+# lone newline is what a failed jq or an interrupted write leaves behind.
+cs_eng_manifest_ok() {
+  [[ -n $1 ]] && cs_jq -e 'type == "object" and has("sessions")' <<<"$1" >/dev/null 2>&1
+}
+
+# cs_eng_manifest_heal: our manifest file exists but is empty or damaged. Keeping the sync bookkeeping around would
+# be worse than useless (sessions.tsv says everything is published, so the sessions would never come back into the
+# manifest); forget it all, like `claude-sync reset`, and let this cycle rebuild it. Drive is not touched.
+cs_eng_manifest_heal() {
+  local f="$CS_HOME/state/manifest.json"
+  [[ -f $f ]] || return 0
+  cs_eng_manifest_ok "$(cat -- "$f")" && return 0
+  cs_log error "run: state/manifest.json is empty or damaged; forgetting the local sync state so that this cycle rebuilds it"
+  cs_reset_forget_state
+  cs_store_init
+}
+
 cs_eng_load() {
   cs_store_init
+  cs_eng_manifest_heal
   mkdir -p -- "$CS_HOME/state/entries" "$CS_HOME/cache/segs"
   CS_ME=$(cs_config_get machine_id "")
   CS_ROOT_ID=$(cs_config_get root_id "")
@@ -62,7 +81,7 @@ cs_eng_my_manifest() {
 
 cs_eng_my_manifest_save() {
   # a failed jq upstream gives an empty string: keep the last good manifest instead of overwriting it
-  if [[ -z $1 ]] || ! cs_jq -e 'type == "object" and has("sessions")' <<<"$1" >/dev/null 2>&1; then
+  if ! cs_eng_manifest_ok "$1"; then
     cs_log error "run: refused to save an empty or invalid manifest"
     return 1
   fi
@@ -79,6 +98,11 @@ cs_eng_find_own() {
 cs_eng_publish_manifest() {
   local j gz id rc=0 md5
   j=$(cs_eng_my_manifest)
+  # never upload a manifest that is empty or damaged: other machines would read it as "this machine has nothing"
+  if ! cs_eng_manifest_ok "$j"; then
+    cs_log error "run: refused to publish an empty or invalid manifest"
+    return 1
+  fi
   gz="$CS_HOME/state/manifest.json.gz"
   cs_manifest_write "$gz" "$j" || rc=$?
   ((rc == 0 || rc == 3)) || return "$rc"
@@ -1081,3 +1105,6 @@ cs_restore() {
   ((CS_RUN_INSTALLED)) || cs_die_t "$CS_EXIT_ERROR" restore.failed "$sid"
   cs_say restore.done "$sid"
 }
+
+# shellcheck source=lib/reset.sh
+source "${BASH_SOURCE[0]%/*}/reset.sh"
