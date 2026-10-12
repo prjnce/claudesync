@@ -67,12 +67,12 @@ cs() { bash "$CS_ROOT/bin/claude-sync" "$@"; }
 
 @test "client without a file: the Client ID and secret are typed on the screen, the secret is not echoed, bad values are refused" {
   run bash -c 'printf "123456789012-abc.apps.googleusercontent.com
-GOCSPX-typed-secret
+GOCSPX-typed-secret-0123456789
 " | bash "$CS_ROOT/bin/claude-sync" google client'
   [ "$status" -eq 0 ]
-  [[ $output != *'GOCSPX-typed-secret'* ]]
+  [[ $output != *'GOCSPX-typed-secret-0123456789'* ]]
   [ "$(jq -r .installed.client_id "$CLAUDE_SYNC_HOME/oauth-client.json" | tr -d '\r')" = 123456789012-abc.apps.googleusercontent.com ]
-  [ "$(jq -r .installed.client_secret "$CLAUDE_SYNC_HOME/oauth-client.json" | tr -d '\r')" = GOCSPX-typed-secret ]
+  [ "$(jq -r .installed.client_secret "$CLAUDE_SYNC_HOME/oauth-client.json" | tr -d '\r')" = GOCSPX-typed-secret-0123456789 ]
   rm "$CLAUDE_SYNC_HOME/oauth-client.json"
   run bash -c 'printf "not-an-id
 secret
@@ -87,6 +87,16 @@ secret
   [[ $output == *'No OAuth client yet'* ]]
 }
 
+@test "client typed on the screen: a secret that does not look like one is asked again (a wrong paste shows up here, not as invalid_client later)" {
+  run bash -c 'printf "123456789012-abc.apps.googleusercontent.com
+two words here
+GOCSPX-typed-secret-0123456789
+" | bash "$CS_ROOT/bin/claude-sync" google client'
+  [ "$status" -eq 0 ]
+  [[ $output == *'does not look like a Google client secret'* ]]
+  [ "$(jq -r .installed.client_secret "$CLAUDE_SYNC_HOME/oauth-client.json" | tr -d '\r')" = GOCSPX-typed-secret-0123456789 ]
+}
+
 @test "setup: an empty answer to the JSON path question lets you type the Client ID and secret" {
   mkdir -p "$T/claude" "$T/drive"
   run bash -c 'printf "1
@@ -95,7 +105,7 @@ n
   [ "$status" -ne 0 ]
   run bash -c 'printf "
 123456789012-abc.apps.googleusercontent.com
-GOCSPX-x
+GOCSPX-0123456789abcdefghij
 " | CS_DRIVE_BACKEND=localfs CS_LFS_ROOT="$1/drive" CS_CLAUDE_DIR="$1/claude" bash "$CS_ROOT/bin/claude-sync" setup --step client' _ "$T"
   [ "$status" -eq 0 ]
   [ -s "$CLAUDE_SYNC_HOME/oauth-client.json" ]

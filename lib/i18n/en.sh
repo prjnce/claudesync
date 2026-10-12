@@ -61,6 +61,7 @@ declare -gA CS_MSG_en=(
   [auth.state_mismatch]='The browser answer does not belong to this login (state mismatch). Run "claude-sync login" again.'
   [auth.denied]='Google returned an error: %s'
   [auth.exchange_failed]='Could not exchange the sign-in code for a token: %s'
+  [auth.invalid_client_hint]='The saved client secret does not match the client ID. Save the downloaded JSON again: claude-sync google client <file.json>, then claude-sync setup.'
   [auth.no_drive_scope]='Google Drive access was not granted (tick the Drive checkbox) - run "claude-sync login" again.'
   [auth.testing_mode]='Warning: the OAuth app is still in "Testing": sign-ins expire after 7 days. Publish it (Google Auth Platform > Audience).'
   [auth.signed_in]='Signed in.'
@@ -174,7 +175,7 @@ declare -gA CS_MSG_en=(
   [google.ask_id]='Client ID (ends with .apps.googleusercontent.com)'
   [google.ask_secret]='Client secret (typing is hidden)'
   [auth.bad_client_id]='"%s" is not a Google OAuth Client ID (expected 123456789012-abc....apps.googleusercontent.com)'
-  [auth.bad_client_secret]='The client secret is empty or contains spaces'
+  [auth.bad_client_secret]='That does not look like a Google client secret (24-60 letters, digits, - or _; e.g. GOCSPX-...). Copy it again from the JSON ("client_secret") or the console.'
   [google.guide]='Create your own Google OAuth client once, then use the same JSON on every machine of yours:
   1. https://console.cloud.google.com -> create a project, e.g. "claude-sync".
   2. APIs & Services -> Library -> enable "Google Drive API".

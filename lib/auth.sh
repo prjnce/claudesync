@@ -62,11 +62,16 @@ cs_random_token() {
 
 # --- OAuth client JSON ------------------------------------------------------------------------------------
 
+# cs_client_secret_ok SECRET: Google secrets are 24-60 characters of letters, digits, "-" and "_" (GOCSPX-...).
+cs_client_secret_ok() {
+  [[ $1 =~ ^[A-Za-z0-9_-]{20,60}$ ]]
+}
+
 # cs_client_install_ids ID SECRET [PROJECT_ID]: the same file as a downloaded JSON, from typed values.
 cs_client_install_ids() {
   local id=$1 secret=$2 project=${3:-} tmp
   [[ $id =~ ^[0-9]+-[A-Za-z0-9_]+\.apps\.googleusercontent\.com$ ]] || cs_die_t "$CS_EXIT_ERROR" auth.bad_client_id "$id"
-  [[ -n $secret && $secret != *[[:space:]]* ]] || cs_die_t "$CS_EXIT_ERROR" auth.bad_client_secret
+  cs_client_secret_ok "$secret" || cs_die_t "$CS_EXIT_ERROR" auth.bad_client_secret
   tmp=$(mktemp "${TMPDIR:-/tmp}/cs-client.XXXXXX")
   jq -n --arg id "$id" --arg s "$secret" --arg p "$project" \
     '{installed: ({client_id: $id, client_secret: $s} + (if $p != "" then {project_id: $p} else {} end))}' | tr -d '\r' >"$tmp"
@@ -79,6 +84,13 @@ cs_client_ask_ids() {
   local id secret
   id=$(cs_ask google.ask_id "")
   secret=$(cs_ask_secret google.ask_secret)
+  # a wrong paste is the usual cause of "invalid_client" later: ask again here, where the mistake is visible
+  local i
+  for i in 1 2; do
+    cs_client_secret_ok "$secret" && break
+    cs_say auth.bad_client_secret >&2
+    secret=$(cs_ask_secret google.ask_secret)
+  done
   cs_client_install_ids "$id" "$secret"
 }
 
@@ -219,6 +231,7 @@ cs_oauth_exchange() {
   if [[ $code != 200 ]] || ! cs_jq -e '.access_token and (.error | not)' <<<"$body" >/dev/null 2>&1; then
     cs_log error "login: token exchange failed (http $code, $(cs_jq -r '.error // "?"' <<<"$body" 2>/dev/null))"
     cs_say auth.exchange_failed "$(cs_jq -r '.error_description // .error // "network"' <<<"$body" 2>/dev/null)" >&2
+    [[ $(cs_jq -r '.error // ""' <<<"$body" 2>/dev/null) == invalid_client ]] && cs_say auth.invalid_client_hint >&2
     return "$CS_EXIT_LOGIN"
   fi
   if ! cs_jq -e --arg s "$CS_OAUTH_SCOPE" '.refresh_token and ((.scope // "") | split(" ") | index([$s]))' <<<"$body" >/dev/null; then
@@ -385,21 +398,19 @@ $CS_PS_LISTENER" | iconv -f UTF-8 -t UTF-16LE | base64 -w0)
 cs_open_browser() {
   [[ ${CS_NO_BROWSER:-0} == 1 || -n ${SSH_CONNECTION:-} ]] && return 1
   if ((CS_WSL)); then
-    # An env var does not cross into Windows without WSLENV, so the URL goes as an argument; explorer.exe
-    # answers with exit code 1 even when it worked, hence "started" = "the program exists".
+    # An env var does not cross into Windows without WSLENV, so the URL is part of the command line.
     local x
     if command -v wslview >/dev/null 2>&1; then
       wslview "$1" >/dev/null 2>&1 && return 0
     fi
-    for x in explorer.exe /mnt/c/Windows/explorer.exe; do
-      if command -v "$x" >/dev/null 2>&1; then
-        "$x" "$1" >/dev/null 2>&1 || true
-        return 0
-      fi
-    done
+    # explorer.exe given a URL may open a File Explorer window instead, so it is not used.
     for x in powershell.exe /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe; do
       command -v "$x" >/dev/null 2>&1 || continue
-      "$x" -NoProfile -NonInteractive -Command 'Start-Process $args[0]' "$1" >/dev/null 2>&1 && return 0
+      "$x" -NoProfile -NonInteractive -Command "Start-Process '$1'" >/dev/null 2>&1 && return 0
+    done
+    for x in rundll32.exe /mnt/c/Windows/System32/rundll32.exe; do
+      command -v "$x" >/dev/null 2>&1 || continue
+      "$x" url.dll,FileProtocolHandler "$1" >/dev/null 2>&1 && return 0
     done
   elif [[ $CS_OS == windows ]]; then
     CS_URL=$1 powershell.exe -NoProfile -NonInteractive -Command 'Start-Process $env:CS_URL' >/dev/null 2>&1 && return 0

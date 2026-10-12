@@ -168,6 +168,14 @@ mock() { # mock NAME JSON -> file:// URL serving JSON
   [[ $body == *'4/abcXYZ'* ]]
 }
 
+@test "invalid_client at the token exchange says which command saves the client again" {
+  cs_client_install "$T/client.json"
+  CS_OAUTH_TOKEN_EP=$(mock bad '{"error":"invalid_client","error_description":"The provided client secret is invalid."}')
+  run cs_oauth_exchange CODE verifier http://127.0.0.1:1/
+  [ "$status" -eq 3 ]
+  [[ $output == *'claude-sync google client'* ]]
+}
+
 @test "login by pasting the bare code (no listener, as in WSL/SSH): token is stored" {
   cs_client_install "$T/client.json"
   export CS_OAUTH_TOKEN_EP CS_NO_BROWSER=1 CS_LOGIN_NO_LISTENER=1 CS_DRIVE_BACKEND=localfs CS_LFS_ROOT="$T/drive"

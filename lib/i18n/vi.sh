@@ -61,6 +61,7 @@ declare -gA CS_MSG_vi=(
   [auth.state_mismatch]='Trả lời từ trình duyệt không thuộc lần đăng nhập này (state không khớp). Hãy chạy lại "claude-sync login".'
   [auth.denied]='Google trả về lỗi: %s'
   [auth.exchange_failed]='Không đổi được mã đăng nhập lấy token: %s'
+  [auth.invalid_client_hint]='Client secret đã lưu không khớp với Client ID. Hãy lưu lại file JSON đã tải: claude-sync google client <file.json>, rồi chạy lại claude-sync setup.'
   [auth.no_drive_scope]='Chưa cấp quyền Google Drive (hãy tích ô Drive) - chạy lại "claude-sync login".'
   [auth.testing_mode]='Cảnh báo: OAuth app vẫn ở chế độ "Testing": đăng nhập hết hạn sau 7 ngày. Hãy Publish (Google Auth Platform > Audience).'
   [auth.signed_in]='Đã đăng nhập.'
@@ -174,7 +175,7 @@ declare -gA CS_MSG_vi=(
   [google.ask_id]='Client ID (kết thúc bằng .apps.googleusercontent.com)'
   [google.ask_secret]='Client secret (không hiện khi gõ)'
   [auth.bad_client_id]='"%s" không phải Client ID của Google OAuth (dạng 123456789012-abc....apps.googleusercontent.com)'
-  [auth.bad_client_secret]='Client secret trống hoặc có khoảng trắng'
+  [auth.bad_client_secret]='Chuỗi này không giống client secret của Google (24-60 ký tự chữ, số, - hoặc _; ví dụ GOCSPX-...). Hãy sao chép lại từ file JSON ("client_secret") hoặc từ console.'
   [google.guide]='Tạo một OAuth client Google của riêng bạn (một lần), rồi dùng cùng file JSON trên mọi máy của bạn:
   1. https://console.cloud.google.com -> tạo project, ví dụ "claude-sync".
   2. APIs & Services -> Library -> bật "Google Drive API".
