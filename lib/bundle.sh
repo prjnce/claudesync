@@ -9,7 +9,7 @@
 # are the same on every machine. Local record state/bundle/<sid>.tsv (rel, sha, size, mtime) says what was last
 # synced: a file whose recorded sha equals the remote one is never downloaded again, even if Claude deleted it
 # (M7). Per-agent base entries live in state/agents/<sid>/<agent>.json, with state/agents/<sid>/<agent>.rec.
-# Object names are flat in the machine area: f-<sid>-<sha16>-<encoded rel>, t-<sid>-a-<agent>-<seq>-<sha16>.jsonl.gz.
+# Object names are flat in the machine area: f-<sid8>-<sha8>-<encoded file name> (only for people reading Drive), t-<sid>-a-<agent>-<seq>-<sha16>.jsonl.gz.
 # Requires core, platform, version, manifest, store, claude, transform, projects, drive, root, status, engine.
 
 [[ -n ${CS_BUNDLE_LOADED:-} ]] && return 0
@@ -83,40 +83,180 @@ cs_bundle_man_set() { # SID KIND KEY JSON: our manifest entry of SID gets KIND[K
 
 # --- bundle files ------------------------------------------------------------------------------------------
 
-# cs_bundle_sync SID DIR: upload new or changed bundle files, then install what other machines have and we
-# do not (cs_bundle_remote_install).
+CS_PACK_FILE_MAX=${CS_PACK_FILE_MAX:-262144} # a file up to this size travels inside a pack
+CS_PACK_MAX=${CS_PACK_MAX:-4194304}          # a pack holds up to this many bytes of files ...
+CS_PACK_MAX_FILES=${CS_PACK_MAX_FILES:-2000} # ... and this many files
+
+# cs_bundle_ccrel DIR REL: REL as a path below the Claude config dir.
+cs_bundle_ccrel() {
+  case $2 in
+    _p/*) printf 'projects/%s/%s\n' "$1" "${2#_p/}" ;;
+    *) printf '%s\n' "$2" ;;
+  esac
+}
+
+# cs_sha256_batch FILE...: the sha256 of each file, one per line in the same order (many files per process).
+# A file that cannot be read gives an empty line.
+cs_sha256_batch() {
+  local out line h i
+  local -a res
+  while (($#)); do
+    local -a chunk=("${@:1:200}")
+    shift "${#chunk[@]}"
+    res=()
+    out=$(sha256sum -- "${chunk[@]}" 2>/dev/null || true)
+    while IFS= read -r line; do
+      [[ -n $line ]] || continue
+      [[ $line == "\\"* ]] && line=${line:1} # sha256sum marks names that need escaping with a leading backslash
+      h=${line:0:64}
+      if [[ $h =~ ^[0-9a-f]{64}$ ]]; then res+=("$h"); else res+=(""); fi
+    done <<<"$out"
+    if ((${#res[@]} != ${#chunk[@]})); then
+      # something was unreadable: ask one by one so that the order stays right
+      res=()
+      for i in "${!chunk[@]}"; do res+=("$(cs_sha256_hex "${chunk[i]}" 2>/dev/null || true)"); done
+    fi
+    printf '%s\n' "${res[@]}"
+  done
+}
+
+# cs_bundle_entry_json REL SHA MODE ID PACK: one files[] entry as JSON text (written by hand: jq -R is not safe for
+# UTF-8 names on jq 1.6).
+cs_bundle_entry_json() { # REL SHA MODE ID PACK
+  printf '"%s":{"m":"%s","id":"%s","sha":"%s","mode":"%s"%s}' "$(cs_json_escape "$1")" "$CS_ME" "$4" "$2" "$3" "$([[ $5 == 1 ]] && printf ',"pack":1')"
+}
+
+# cs_bundle_man_merge SID JSON_OBJECT: our manifest's files[] of SID gets those entries (one jq call for all).
+cs_bundle_man_merge() {
+  local m
+  m=$(cs_eng_my_manifest)
+  cs_manifest_session "$m" "$1" >/dev/null || return 0
+  cs_eng_my_manifest_save "$(cs_jq -c --arg s "$1" --argjson o "$2" '.sessions[$s].files = ((.sessions[$s].files // {}) + $o)' <<<"$m")"
+}
+
+# cs_bundle_upload_pack SID DIR IDX REL... : one pack object holding those files. Prints the entries JSON on success.
+cs_bundle_upload_pack() {
+  local sid=$1 dir=$2 idx=$3 cc list pk sha id rel entries='' sep=''
+  shift 3
+  cc=$(cs_claude_dir)
+  list="$CS_HOME/staging/pack.$$.list"
+  pk="$CS_HOME/staging/pack.$$.tgz"
+  for rel in "$@"; do cs_bundle_ccrel "$dir" "$rel"; done >"$list"
+  tar -czf "$pk" -C "$cc" --transform "s,^projects/$dir/,_p/," -T "$list" 2>/dev/null || {
+    rm -f -- "$list" "$pk"
+    return 1
+  }
+  sha=$(cs_sha256_hex "$pk")
+  id=$(drv_generate_ids 1) || return
+  drv_upload "$CS_MY_AREA" "f-${sid:0:8}-pack$idx-${sha:0:8}.tgz" "$pk" "{\"csKind\":\"pack\",\"csSha\":\"$sha\",\"csSid\":\"$sid\"}" "$id" >/dev/null || {
+    local rc=$?
+    rm -f -- "$list" "$pk"
+    return "$rc"
+  }
+  rm -f -- "$list" "$pk"
+  printf '%s\n' "$id"
+}
+
+# cs_bundle_sync SID DIR: upload new or changed bundle files (small ones together in packs: one upload for many files),
+# then install what other machines have and we do not (cs_bundle_remote_install).
 cs_bundle_sync() {
-  local sid=$1 dir=$2 recf="$CS_HOME/state/bundle/$1.tsv" rel size mt mode sha abs id name rc
+  local sid=$1 dir=$2 recf="$CS_HOME/state/bundle/$1.tsv" rel size mt mode sha abs i rc id
   mkdir -p -- "$CS_HOME/state/bundle"
-  local -A rsha=() rsize=() rmt=() up=()
+  local -A rsha=() rsize=() rmt=()
   while IFS=$'\t' read -r rel sha size mt; do
     [[ -n $rel ]] || continue
     rsha[$rel]=$sha rsize[$rel]=$size rmt[$rel]=$mt
   done 2>/dev/null <"$recf" || true
   local inman=0
   cs_manifest_session "$(cs_eng_my_manifest)" "$sid" >/dev/null && inman=1
+  # 1. files whose size or mtime differ from the record
+  local -a c_rel=() c_abs=() c_size=() c_mt=() c_mode=()
   while IFS=$'\t' read -r rel size mt mode; do
     [[ -n $rel ]] || continue
     [[ ${rsize[$rel]:-} == "$size" && ${rmt[$rel]:-} == "$mt" ]] && continue
     abs=$(cs_bundle_abs "$dir" "$rel") || continue
-    sha=$(cs_sha256_hex "$abs") || continue
-    if [[ ${rsha[$rel]:-} == "$sha" ]]; then
-      rsize[$rel]=$size rmt[$rel]=$mt
-      continue
-    fi
-    ((inman)) || continue
-    id=$(drv_generate_ids 1) || return
-    name="f-$sid-${sha:0:16}-$(cs_bundle_enc "$rel")"
-    drv_upload "$CS_MY_AREA" "$name" "$abs" "{\"csKind\":\"file\",\"csSha\":\"$sha\",\"csSid\":\"$sid\"}" "$id" >/dev/null || {
-      rc=$?
-      cs_eng_note_drv "$rc"
-      continue
-    }
-    cs_bundle_man_set "$sid" files "$rel" "$(cs_jq -nc --arg m "$CS_ME" --arg id "$id" --arg sha "$sha" --arg mode "$mode" '{m: $m, id: $id, sha: $sha, mode: $mode}')"
-    rsha[$rel]=$sha rsize[$rel]=$size rmt[$rel]=$mt up[$rel]=1
-    cs_log info "run: bundle file uploaded for $sid"
-    CS_BUNDLE_UPLOADED=$((${CS_BUNDLE_UPLOADED:-0} + 1))
+    c_rel+=("$rel") c_abs+=("$abs") c_size+=("$size") c_mt+=("$mt") c_mode+=("$mode")
   done < <(cs_bundle_list "$sid" "$dir")
+  local entries='' sep='' uploaded=0
+  if ((${#c_rel[@]})); then
+    # 2. their hashes, many files per process
+    local -a hashes=()
+    mapfile -t hashes < <(cs_sha256_batch "${c_abs[@]}")
+    # 3. unchanged content (only the mtime moved) is just recorded; the rest must go up
+    local -a u_idx=()
+    for i in "${!c_rel[@]}"; do
+      sha=${hashes[i]:-}
+      [[ -n $sha ]] || continue
+      if [[ ${rsha[${c_rel[i]}]:-} == "$sha" ]]; then
+        rsize[${c_rel[i]}]=${c_size[i]} rmt[${c_rel[i]}]=${c_mt[i]}
+      elif ((inman)); then
+        u_idx+=("$i")
+      fi
+    done
+    # 4. small files in packs, larger ones on their own
+    local -a pk_idx=() big_idx=()
+    for i in "${u_idx[@]}"; do
+      if ((c_size[i] <= CS_PACK_FILE_MAX)) && command -v tar >/dev/null 2>&1; then pk_idx+=("$i"); else big_idx+=("$i"); fi
+    done
+    local -a group=() gl=()
+    local gbytes=0 gn=0 pkid g
+    cs_bundle_flush_group() {
+      ((${#group[@]})) || return 0
+      if ((${#group[@]} == 1)); then
+        big_idx+=("${group[0]}")
+      else
+        local -a rels=()
+        for g in "${group[@]}"; do rels+=("${c_rel[g]}"); done
+        if pkid=$(cs_bundle_upload_pack "$sid" "$dir" "$gn" "${rels[@]}"); then
+          gn=$((gn + 1))
+          for g in "${group[@]}"; do
+            entries+="$sep$(cs_bundle_entry_json "${c_rel[g]}" "${hashes[g]}" "${c_mode[g]}" "$pkid" 1)"
+            sep=','
+            rsha[${c_rel[g]}]=${hashes[g]} rsize[${c_rel[g]}]=${c_size[g]} rmt[${c_rel[g]}]=${c_mt[g]}
+            uploaded=$((uploaded + 1))
+          done
+        else
+          rc=$?
+          cs_eng_note_drv "$rc"
+        fi
+      fi
+      group=()
+      gbytes=0
+    }
+    for i in "${pk_idx[@]}"; do
+      if ((gbytes + c_size[i] > CS_PACK_MAX || ${#group[@]} >= CS_PACK_MAX_FILES)); then cs_bundle_flush_group; fi
+      group+=("$i")
+      gbytes=$((gbytes + c_size[i]))
+    done
+    cs_bundle_flush_group
+    # larger files: one object each (their ids are requested together)
+    if ((${#big_idx[@]})); then
+      local -a ids=()
+      mapfile -t ids < <(drv_generate_ids "${#big_idx[@]}") || return
+      local n=0
+      for i in "${big_idx[@]}"; do
+        id=${ids[n]:-}
+        n=$((n + 1))
+        [[ -n $id ]] || continue
+        if drv_upload "$CS_MY_AREA" "f-${sid:0:8}-${hashes[i]:0:8}-$(cs_bundle_enc "${c_rel[i]##*/}")" "${c_abs[i]}" \
+          "{\"csKind\":\"file\",\"csSha\":\"${hashes[i]}\",\"csSid\":\"$sid\"}" "$id" >/dev/null; then
+          entries+="$sep$(cs_bundle_entry_json "${c_rel[i]}" "${hashes[i]}" "${c_mode[i]}" "$id" 0)"
+          sep=','
+          rsha[${c_rel[i]}]=${hashes[i]} rsize[${c_rel[i]}]=${c_size[i]} rmt[${c_rel[i]}]=${c_mt[i]}
+          uploaded=$((uploaded + 1))
+        else
+          rc=$?
+          cs_eng_note_drv "$rc"
+        fi
+      done
+    fi
+  fi
+  # 5. one manifest update for everything that went up
+  if [[ -n $entries ]]; then
+    cs_bundle_man_merge "$sid" "{$entries}"
+    cs_log info "run: $uploaded bundle file(s) uploaded for $sid"
+    CS_BUNDLE_UPLOADED=$((${CS_BUNDLE_UPLOADED:-0} + uploaded))
+  fi
   cs_bundle_record_save "$recf" rsha rsize rmt
   cs_bundle_remote_install "$sid" "$dir"
 }
@@ -130,12 +270,20 @@ cs_bundle_record_save() { # FILE ASSOC_SHA ASSOC_SIZE ASSOC_MT (names of associa
   mv -f -- "$1.tmp.$$" "$1"
 }
 
+# cs_bundle_place TMPFILE ABS MODE: put an installed file in place (mode first, then rename).
+cs_bundle_place() {
+  mkdir -p -- "$(dirname -- "$2")"
+  chmod "$3" "$1" 2>/dev/null || true
+  mv -f -- "$1" "$2.csync-tmp" && mv -f -- "$2.csync-tmp" "$2"
+}
+
 # cs_bundle_remote_install SID DIR: install bundle files that another machine has and whose sha is not the one
 # recorded here. Where two machines advertise different content for a name, the highest machine id wins, so every
-# machine picks the same one. Files changed here in this cycle are left alone.
+# machine picks the same one. Files changed here in this cycle are left alone. Files that sit in a pack are fetched
+# with one download per pack.
 cs_bundle_remote_install() {
-  local sid=$1 dir=$2 recf="$CS_HOME/state/bundle/$1.tsv" f mid rel sha id mode abs tmp got size mt lsha
-  local -A rsha=() rsize=() rmt=() up=()
+  local sid=$1 dir=$2 recf="$CS_HOME/state/bundle/$1.tsv" f mid rel sha id mode pack abs tmp got size mt lsha
+  local -A rsha=() rsize=() rmt=() pk_list=() pk_sha=() pk_mode=() pk_abs=()
   mkdir -p -- "$CS_HOME/state/bundle"
   while IFS=$'\t' read -r rel sha size mt; do
     [[ -n $rel ]] || continue
@@ -145,10 +293,10 @@ cs_bundle_remote_install() {
   for f in "$CS_HOME"/state/remote/*.json; do
     [[ -f $f ]] || continue
     mid=$(basename -- "$f" .json)
-    cur+=$(cs_jq -r --arg s "$sid" --arg m "$mid" '.sessions[$s].files // {} | to_entries[] | [.key, .value.sha, .value.id, (.value.mode // "644"), $m] | @tsv' "$f")$'\n'
+    cur+=$(cs_jq -r --arg s "$sid" --arg m "$mid" '.sessions[$s].files // {} | to_entries[] | [.key, .value.sha, .value.id, (.value.mode // "644"), $m, ((.value.pack // 0) | tostring)] | @tsv' "$f")$'\n'
   done
   [[ -n ${cur//$'\n'/} ]] || return 0
-  while IFS=$'\t' read -r rel sha id mode mid; do
+  while IFS=$'\t' read -r rel sha id mode mid pack; do
     [[ -n $rel ]] || continue
     [[ ${rsha[$rel]:-} == "$sha" ]] && continue
     abs=$(cs_bundle_abs "$dir" "$rel") || {
@@ -167,6 +315,11 @@ cs_bundle_remote_install() {
         continue
       fi
     fi
+    if [[ $pack == 1 ]]; then
+      pk_list[$id]+="$rel"$'\n'
+      pk_sha[$rel]=$sha pk_mode[$rel]=$mode pk_abs[$rel]=$abs
+      continue
+    fi
     tmp="$CS_HOME/staging/bundle.$$"
     drv_download "$id" "$tmp" || {
       cs_eng_note_drv $?
@@ -178,13 +331,41 @@ cs_bundle_remote_install() {
       rm -f -- "$tmp"
       continue
     fi
-    mkdir -p -- "$(dirname -- "$abs")"
-    chmod "$mode" "$tmp" 2>/dev/null || true
-    if ! { mv -f -- "$tmp" "$abs.csync-tmp" && mv -f -- "$abs.csync-tmp" "$abs"; }; then continue; fi
+    cs_bundle_place "$tmp" "$abs" "$mode" || continue
     read -r size mt < <(stat -c '%s %Y' -- "$abs")
     rsha[$rel]=$sha rsize[$rel]=$size rmt[$rel]=$mt
     any=1
   done < <(printf '%s' "$cur" | "$CS_AWK" -F'\t' -v OFS='\t' '$1 != "" { if (!($1 in best) || $5 > mid[$1]) { best[$1] = $0; mid[$1] = $5 } } END { for (k in best) print best[k] }' | LC_ALL=C sort)
+  # packs: one download and one extraction per pack
+  local pid pk xd lst
+  for pid in "${!pk_list[@]}"; do
+    pk="$CS_HOME/staging/pack.$$.dl.tgz"
+    xd="$CS_HOME/staging/pack.$$.x"
+    lst="$CS_HOME/staging/pack.$$.need"
+    drv_download "$pid" "$pk" || {
+      cs_eng_note_drv $?
+      continue
+    }
+    rm -rf -- "$xd"
+    mkdir -p -- "$xd"
+    printf '%s' "${pk_list[$pid]}" >"$lst"
+    tar -xzf "$pk" -C "$xd" -T "$lst" 2>/dev/null || cs_log warn "run: a pack of $sid could not be unpacked completely"
+    while IFS= read -r rel; do
+      [[ -n $rel ]] || continue
+      tmp="$xd/$rel"
+      [[ -f $tmp && $(cs_sha256_hex "$tmp") == "${pk_sha[$rel]}" ]] || {
+        cs_log warn "run: a file in a pack of $sid has the wrong content; skipped"
+        continue
+      }
+      abs=${pk_abs[$rel]}
+      cs_bundle_place "$tmp" "$abs" "${pk_mode[$rel]}" || continue
+      read -r size mt < <(stat -c '%s %Y' -- "$abs")
+      rsha[$rel]=${pk_sha[$rel]} rsize[$rel]=$size rmt[$rel]=$mt
+      any=1
+    done <<<"${pk_list[$pid]}"
+    rm -rf -- "$xd"
+    rm -f -- "$pk" "$lst"
+  done
   cs_bundle_record_save "$recf" rsha rsize rmt
   ((any)) && cs_log info "run: bundle files installed for $sid"
   return 0

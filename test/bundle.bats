@@ -65,16 +65,72 @@ a_fixture() {
   done
 }
 
+# pack_members: every file name inside every pack object of the Drive
+pack_members() {
+  local m d
+  for m in $(grep -l '"csKind":"pack"' "$SIM"/drive/objects/*/meta.json); do
+    d=$(dirname "$m")
+    tar -tzf "$d/content"
+  done
+}
+kinds() { jq -r --arg k "$1" 'select(.appProperties.csKind == $k) | .name' "$SIM"/drive/objects/*/meta.json | tr -d '\r' | grep -c . || true; }
+
 @test "files of the never-sync list are not uploaded" {
   a_fixture
   sim_run A >/dev/null
-  names=$(jq -r 'select(.appProperties.csKind == "file") | .name' "$SIM"/drive/objects/*/meta.json | tr -d '\r')
-  echo "$names"
-  [ "$(printf '%s
-' "$names" | grep -c .)" -eq 4 ]
-  ! printf '%s
-' "$names" | grep -qE 'superseded|compact|ccr-tip'
+  members=$(pack_members)
+  echo "$members"
+  [ "$(printf '%s\n' "$members" | grep -c .)" -eq 4 ]
+  ! printf '%s\n' "$members" | grep -qE 'superseded|compact|ccr-tip'
   [ ! -e "$BCC/projects/$BSLUG/$SID.ccr-tip.json" ]
+}
+
+@test "many small files travel in one pack: one object, one download on the other machine, contents and modes intact" {
+  sim_write A "$ASLUG" "$SID" "$(uline 1)"
+  mkdir -p "$ACC/file-history/$SID" "$ACC/projects/$ASLUG/$SID/tool-results"
+  for i in $(seq 1 30); do printf 'content %s\n' "$i" >"$ACC/file-history/$SID/h$i@v1"; done
+  printf '#!/bin/sh\n' >"$ACC/projects/$ASLUG/$SID/tool-results/run.sh"
+  chmod 755 "$ACC/projects/$ASLUG/$SID/tool-results/run.sh"
+  sim_run A >/dev/null
+  [ "$(kinds pack)" -eq 1 ]
+  [ "$(kinds file)" -eq 0 ]
+  [ "$(pack_members | grep -c .)" -eq 31 ]
+  [ "$(jq -r '.sessions[].files | length' "$SIM/A/home/.claude-sync/state/manifest.json" | tr -d '\r')" -eq 31 ]
+  sim_run B >/dev/null
+  for i in 1 15 30; do [ "$(cat "$BCC/file-history/$SID/h$i@v1")" = "content $i" ]; done
+  [ "$(stat -c %a "$BCC/projects/$BSLUG/$SID/tool-results/run.sh")" = "$(stat -c %a "$ACC/projects/$ASLUG/$SID/tool-results/run.sh")" ]
+  for m in A B A B; do
+    run sim_run "$m"
+    [[ $output == *'0 installed, 0 published'* ]] || { echo "$m: $output"; return 1; }
+  done
+  [ "$(kinds pack)" -eq 1 ]
+}
+
+@test "a changed file in a pack goes up on its own and replaces the old one on the other machine" {
+  sim_write A "$ASLUG" "$SID" "$(uline 1)"
+  mkdir -p "$ACC/file-history/$SID"
+  for i in 1 2 3; do printf 'v1 %s\n' "$i" >"$ACC/file-history/$SID/h$i@v1"; done
+  sim_run A >/dev/null
+  sim_run B >/dev/null
+  printf 'v2 2\n' >"$ACC/file-history/$SID/h2@v1"
+  sim_run A >/dev/null
+  [ "$(kinds file)" -eq 1 ]
+  sim_run B >/dev/null
+  [ "$(cat "$BCC/file-history/$SID/h2@v1")" = 'v2 2' ]
+  [ "$(cat "$BCC/file-history/$SID/h3@v1")" = 'v1 3' ]
+}
+
+@test "files above the pack size limit are uploaded one by one, small ones still packed" {
+  sim_write A "$ASLUG" "$SID" "$(uline 1)"
+  mkdir -p "$ACC/file-history/$SID"
+  head -c 2000 /dev/zero | tr '\0' b >"$ACC/file-history/$SID/big@v1"
+  for i in 1 2 3; do printf 's%s\n' "$i" >"$ACC/file-history/$SID/s$i@v1"; done
+  CS_PACK_FILE_MAX=100 sim_run A >/dev/null
+  [ "$(kinds file)" -eq 1 ]
+  [ "$(kinds pack)" -eq 1 ]
+  sim_run B >/dev/null
+  [ "$(wc -c <"$BCC/file-history/$SID/big@v1" | tr -d ' ')" -eq 2000 ]
+  [ "$(cat "$BCC/file-history/$SID/s2@v1")" = s2 ]
 }
 
 @test "M7: a tool result that Claude on B cleaned up is not downloaded again; a new version of it is" {
