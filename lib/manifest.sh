@@ -58,14 +58,16 @@ cs_manifest_session() {
 # Other fields of an existing entry (project, launch, plan_slug, files, subagents, forked) are kept
 # unless given.
 cs_manifest_put_session() {
-  cs_jq -c --arg s "$2" --argjson e "$3" --arg p "${4:-}" --arg l "${5:-}" '
-    (.sessions[$s] // {}) as $old
-    | .sessions[$s] = ($old + $e
+  # the manifest and the entry come in on stdin as two documents: an entry with hundreds of files is far above the
+  # command-line limit of Windows, and jq failing there used to leave an empty manifest behind
+  { printf '%s\n' "$1"; printf '%s\n' "$3"; } | cs_jq -cs --arg s "$2" --arg p "${4:-}" --arg l "${5:-}" '
+    .[0] as $m | .[1] as $e | ($m.sessions[$s] // {}) as $old
+    | $m | .sessions[$s] = ($old + $e
       + (if ($old.files // $e.files) then {files: (($old.files // {}) + ($e.files // {}))} else {} end)
       + (if ($old.subagents // $e.subagents) then {subagents: (($old.subagents // {}) + ($e.subagents // {}))} else {} end)
       + (if ($old.forked // $e.forked) then {forked: (($old.forked // {}) + ($e.forked // {}))} else {} end)
       + (if $p != "" then {project: $p} else {} end)
-      + (if $l != "" then {launch: $l} else {} end))' <<<"$1"
+      + (if $l != "" then {launch: $l} else {} end))'
 }
 
 # cs_live_json SID...: the live.json body (SPEC §9.3).

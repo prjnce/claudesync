@@ -61,6 +61,11 @@ cs_eng_my_manifest() {
 }
 
 cs_eng_my_manifest_save() {
+  # a failed jq upstream gives an empty string: keep the last good manifest instead of overwriting it
+  if [[ -z $1 ]] || ! cs_jq -e 'type == "object" and has("sessions")' <<<"$1" >/dev/null 2>&1; then
+    cs_log error "run: refused to save an empty or invalid manifest"
+    return 1
+  fi
   cs_write_atomic "$CS_HOME/state/manifest.json" printf '%s\n' "$1"
 }
 

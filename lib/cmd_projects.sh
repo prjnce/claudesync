@@ -71,8 +71,10 @@ cs_projects_select() {
     roots+=("$root")
     printf '  %2d) %s  (%s, %s)\n' "$i" "$root" "$n" "$(cs_human_bytes "$b")"
   done <<<"$un"
-  ans=$(cs_ask projects.ask_select "a")
-  if [[ $ans == a || $ans == all ]]; then
+  ans=$(cs_ask projects.ask_select "")
+  if [[ -z $ans ]]; then
+    return 0 # nothing chosen: nothing changes (neither the projects nor the mode)
+  elif [[ $ans == a || $ans == all ]]; then
     cs_config_set mode all
     ans=$(seq -s, 1 "$i")
   else

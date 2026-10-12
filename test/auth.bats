@@ -150,6 +150,37 @@ mock() { # mock NAME JSON -> file:// URL serving JSON
   [ "$(sed -n 's/^QUERY //p' "$out" | tr -d '\r')" = 'state=S1&code=4%2Fabc' ]
 }
 
+@test "pasted login input: whole address, bare query or bare code all become a query; junk is refused" {
+  [ "$(cs_login_query_of 'http://127.0.0.1:36805/?state=S1&code=4%2Fabc&scope=x#frag')" = 'state=S1&code=4%2Fabc&scope=x' ]
+  [ "$(cs_login_query_of $'  state=S1&code=4/abc \r')" = 'state=S1&code=4/abc' ]
+  [ "$(cs_login_query_of 'code=4/abcdef')" = 'code=4/abcdef' ]
+  [ "$(cs_login_query_of '4/0AbCdEf-gh_IJ')" = 'code=4/0AbCdEf-gh_IJ' ]
+  run cs_login_query_of 'hello world'
+  [ "$status" -eq 1 ]
+  run cs_login_query_of ''
+  [ "$status" -eq 1 ]
+}
+
+@test "listener: the page shown after the redirect displays the code to copy" {
+  out="$T/listener.out"
+  CS_LOGIN_TIMEOUT=30 cs_listener_start "$out"
+  body=$(curl -s --noproxy '*' "http://127.0.0.1:$CS_PORT/?state=S1&code=4%2FabcXYZ")
+  [[ $body == *'4/abcXYZ'* ]]
+}
+
+@test "login by pasting the bare code (no listener, as in WSL/SSH): token is stored" {
+  cs_client_install "$T/client.json"
+  export CS_OAUTH_TOKEN_EP CS_NO_BROWSER=1 CS_LOGIN_NO_LISTENER=1 CS_DRIVE_BACKEND=localfs CS_LFS_ROOT="$T/drive"
+  CS_OAUTH_TOKEN_EP=$(mock tok '{"access_token":"AT9","refresh_token":"RT9","expires_in":3599,"scope":"https://www.googleapis.com/auth/drive.file"}')
+  run bash -c 'printf "4/0AbCdEfGhIjK
+" | bash "$CS_ROOT/bin/claude-sync" login'
+  echo "$output"
+  [ "$status" -eq 0 ]
+  [[ $output == *'Signed in as: Local Test'* ]]
+  CS_TOKEN_CACHE=
+  [ "$(cs_token_load | jq -r .refresh_token | tr -d '\r')" = RT9 ]
+}
+
 @test "full login without a browser: callback hits the loopback listener, token is stored, logout revokes" {
   cs_client_install "$T/client.json"
   export CS_OAUTH_TOKEN_EP CS_OAUTH_REVOKE_EP CS_NO_BROWSER=1 CS_LOGIN_TIMEOUT=60 CS_DRIVE_BACKEND=localfs CS_LFS_ROOT="$T/drive"

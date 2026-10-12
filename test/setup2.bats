@@ -139,3 +139,73 @@ crlf_session() {
   CLAUDE_CODE_HOVER_REST=1 run cs run
   [ "$status" -eq 1 ]
 }
+
+# jsoncwd PATH: PATH as Claude writes it into a transcript on this host (JSON-escaped)
+jsoncwd() {
+  local p=$1
+  if command -v cygpath >/dev/null 2>&1; then p=$(cygpath -w "$p"); fi
+  printf '%s' "${p//\\/\\\\}"
+}
+
+# a session that was started in a folder that is not a project yet
+unmapped_session() {
+  mkdir -p "$T/work/X" "$CS_CLAUDE_DIR/projects/slug-x"
+  printf '{"type":"user","cwd":"%s","n":1}
+' "$(jsoncwd "$T/work/X")" >"$CS_CLAUDE_DIR/projects/slug-x/0b7a1c2e-1111-4222-8333-444455556666.jsonl"
+}
+
+@test "step 8: one numbered list of everything that uses Claude here; Enter = all, numbers choose, the rest is left out" {
+  printf '1
+n
+-
+n
+My Sync
+PC-A
+' | CS_SETUP_ONLY_STEPS='lang deps client proxy login root machine' bash "$CS_ROOT/bin/claude-sync" setup >/dev/null
+  mkdir -p "$T/work/P0"
+  mkdir -p "$CS_CLAUDE_DIR/projects/slug-p0"
+  printf '{"type":"user","cwd":"%s","n":1}
+' "$(jsoncwd "$T/work/P0")" >"$CS_CLAUDE_DIR/projects/slug-p0/0b7a1c2e-1111-4222-8333-444455556661.jsonl"
+  bash "$CS_ROOT/bin/claude-sync" projects map P0 "$T/work/P0" >/dev/null
+  unmapped_session
+  # Enter: everything
+  run bash -c 'printf "
+" | bash "$CS_ROOT/bin/claude-sync" setup --step projects'
+  [ "$status" -eq 0 ]
+  [[ $output == *'Projects that use Claude on this machine:'* ]]
+  [[ $output == *'1. P0'* && $output == *'2. X'* ]]
+  [[ $output == *'Choose the projects to sync from this machine'* ]]
+  [ "$(grep -vc '^#' "$CLAUDE_SYNC_HOME/state/projects.tsv")" -eq 2 ]
+  [ "$(cut -f6 "$CLAUDE_SYNC_HOME/state/projects.tsv" | grep -v '^enabled' | sort -u)" = 1 ]
+  grep -qx 'mode=all' "$CLAUDE_SYNC_HOME/config"
+  # a wrong number is refused and asked again; then only P0 is chosen: X is not added, mode selected
+  bash "$CS_ROOT/bin/claude-sync" projects unmap X >/dev/null
+  run bash -c 'printf "9
+1
+" | bash "$CS_ROOT/bin/claude-sync" setup --step projects'
+  [ "$status" -eq 0 ]
+  [[ $output == *'Not a valid choice'* ]]
+  [ "$(grep -vc '^#' "$CLAUDE_SYNC_HOME/state/projects.tsv")" -eq 1 ]
+  grep -qx 'mode=selected' "$CLAUDE_SYNC_HOME/config"
+  # choosing only X leaves P0 out (disabled) and maps X
+  run bash -c 'printf "2
+" | bash "$CS_ROOT/bin/claude-sync" setup --step projects'
+  [ "$status" -eq 0 ]
+  [ "$(grep -vc '^#' "$CLAUDE_SYNC_HOME/state/projects.tsv")" -eq 2 ]
+  [ "$(awk -F'	' '$3 == "P0" { print $6 }' "$CLAUDE_SYNC_HOME/state/projects.tsv")" = 0 ]
+}
+
+@test "step 9: even when the value is fine it asks; a new value is written after a backup" {
+  printf '{"cleanupPeriodDays":3650}
+' >"$CS_CLAUDE_DIR/settings.json"
+  run bash -c 'printf "y
+" | bash "$CS_ROOT/bin/claude-sync" setup --step retention'
+  [[ $output == *'Keep it at 3650 days?'* ]]
+  [ "$(jq -r .cleanupPeriodDays "$CS_CLAUDE_DIR/settings.json" | tr -d '\r')" = 3650 ]
+  run bash -c 'printf "n
+1000
+" | bash "$CS_ROOT/bin/claude-sync" setup --step retention'
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .cleanupPeriodDays "$CS_CLAUDE_DIR/settings.json" | tr -d '\r')" = 1000 ]
+  [ -n "$(ls "$CLAUDE_SYNC_HOME/backups" | grep '^settings.json')" ]
+}

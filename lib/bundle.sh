@@ -78,7 +78,8 @@ cs_bundle_man_set() { # SID KIND KEY JSON: our manifest entry of SID gets KIND[K
   local m
   m=$(cs_eng_my_manifest)
   cs_manifest_session "$m" "$1" >/dev/null || return 0
-  cs_eng_my_manifest_save "$(cs_jq -c --arg s "$1" --arg kind "$2" --arg k "$3" --argjson v "$4" '.sessions[$s][$kind][$k] = $v' <<<"$m")"
+  cs_eng_my_manifest_save "$({ printf '%s\n' "$m"; printf '%s\n' "$4"; } | cs_jq -cs --arg s "$1" --arg kind "$2" --arg k "$3" \
+    '.[0] as $m | .[1] as $v | $m | .sessions[$s][$kind][$k] = $v')"
 }
 
 # --- bundle files ------------------------------------------------------------------------------------------
@@ -131,7 +132,8 @@ cs_bundle_man_merge() {
   local m
   m=$(cs_eng_my_manifest)
   cs_manifest_session "$m" "$1" >/dev/null || return 0
-  cs_eng_my_manifest_save "$(cs_jq -c --arg s "$1" --argjson o "$2" '.sessions[$s].files = ((.sessions[$s].files // {}) + $o)' <<<"$m")"
+  cs_eng_my_manifest_save "$({ printf '%s\n' "$m"; printf '%s\n' "$2"; } | cs_jq -cs --arg s "$1" \
+    '.[0] as $m | .[1] as $o | $m | .sessions[$s].files = ((.sessions[$s].files // {}) + $o)')"
 }
 
 # cs_bundle_upload_pack SID DIR IDX REL... : one pack object holding those files. Prints the entries JSON on success.

@@ -320,7 +320,8 @@ try {
     while (-not $t.Wait(500)) { if ((Get-Date) -ge $deadline) { [Console]::Out.WriteLine('ERROR timeout'); exit 3 } }
     $c = $t.Result; $q = $c.Request.Url.Query
     $done = $q -match '(^|[?&])(code|error)='
-    $html = if ($done) { $env:CS_DONE_HTML } else { 'not found' }
+    $code = ''; if ($q -match '(^|[?&])code=([^&]*)') { $code = [Uri]::UnescapeDataString($Matches[2]) -replace '[<&]', '' }
+    $html = if ($done) { $env:CS_DONE_HTML.Replace('@CODE@', $code) } else { 'not found' }
     $b = [Text.Encoding]::UTF8.GetBytes($html)
     $c.Response.StatusCode = $(if ($done) { 200 } else { 404 }); $c.Response.ContentType = 'text/html; charset=utf-8'
     $c.Response.ContentLength64 = $b.Length; $c.Response.OutputStream.Write($b, 0, $b.Length); $c.Response.Close()
@@ -335,7 +336,8 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         q = urllib.parse.urlsplit(self.path).query
         done = any(k in ('code', 'error') for k, _ in urllib.parse.parse_qsl(q))
-        b = os.environ.get('CS_DONE_HTML', 'done').encode('utf-8') if done else b'not found'
+        code = dict(urllib.parse.parse_qsl(q)).get('code', '')
+        b = os.environ.get('CS_DONE_HTML', 'done').replace('@CODE@', code.replace('<', '').replace('&', '')).encode('utf-8') if done else b'not found'
         self.send_response(200 if done else 404)
         self.send_header('Content-Type', 'text/html; charset=utf-8'); self.send_header('Content-Length', str(len(b)))
         self.send_header('Connection', 'close'); self.end_headers(); self.wfile.write(b)
@@ -356,7 +358,7 @@ cs_listener_start() {
   local out=$1 i
   CS_PORT=
   export CS_TIMEOUT_SEC=$CS_LOGIN_TIMEOUT CS_DONE_HTML
-  CS_DONE_HTML="<!doctype html><meta charset=\"utf-8\"><title>claude-sync</title><h2>$(cs_t auth.browser_done)</h2>"
+  CS_DONE_HTML="<!doctype html><meta charset=\"utf-8\"><title>claude-sync</title><h2>$(cs_t auth.browser_done)</h2><p>$(cs_t auth.browser_code)</p><pre style=\"font-size:1.3em;user-select:all\">@CODE@</pre>"
   if [[ $CS_OS == windows ]]; then
     local enc
     enc=$(printf '%s' "\$ErrorActionPreference='Stop'; \$ProgressPreference='SilentlyContinue'
@@ -382,7 +384,24 @@ $CS_PS_LISTENER" | iconv -f UTF-8 -t UTF-16LE | base64 -w0)
 # cs_open_browser URL: best effort (the URL is always printed as well).
 cs_open_browser() {
   [[ ${CS_NO_BROWSER:-0} == 1 || -n ${SSH_CONNECTION:-} ]] && return 1
-  if [[ $CS_OS == windows ]] || ((CS_WSL)); then
+  if ((CS_WSL)); then
+    # An env var does not cross into Windows without WSLENV, so the URL goes as an argument; explorer.exe
+    # answers with exit code 1 even when it worked, hence "started" = "the program exists".
+    local x
+    if command -v wslview >/dev/null 2>&1; then
+      wslview "$1" >/dev/null 2>&1 && return 0
+    fi
+    for x in explorer.exe /mnt/c/Windows/explorer.exe; do
+      if command -v "$x" >/dev/null 2>&1; then
+        "$x" "$1" >/dev/null 2>&1 || true
+        return 0
+      fi
+    done
+    for x in powershell.exe /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe; do
+      command -v "$x" >/dev/null 2>&1 || continue
+      "$x" -NoProfile -NonInteractive -Command 'Start-Process $args[0]' "$1" >/dev/null 2>&1 && return 0
+    done
+  elif [[ $CS_OS == windows ]]; then
     CS_URL=$1 powershell.exe -NoProfile -NonInteractive -Command 'Start-Process $env:CS_URL' >/dev/null 2>&1 && return 0
   elif [[ -n ${DISPLAY:-}${WAYLAND_DISPLAY:-} ]] && command -v xdg-open >/dev/null 2>&1; then
     xdg-open "$1" >/dev/null 2>&1 &
@@ -397,6 +416,26 @@ cs_auth_url() {
     "$CS_OAUTH_AUTH_EP" "$(cs_urlenc "$CS_CLIENT_ID")" "$(cs_urlenc "$1")" "$(cs_urlenc "$CS_OAUTH_SCOPE")" "$2" "$3"
 }
 
+# cs_login_query_of LINE: what the user typed/pasted -> a query string ("code=..&state=.."); rc 1 = nothing usable.
+# Accepted: the whole address from the browser bar (even a "refused to connect" page), only its query, or the bare code.
+cs_login_query_of() {
+  local l=$1
+  l=${l//$'\r'/}
+  l=${l#"${l%%[![:space:]]*}"}
+  l=${l%"${l##*[![:space:]]}"}
+  l=${l%%#*}
+  [[ -n $l ]] || return 1
+  if [[ $l == *\?* ]]; then
+    printf '%s\n' "${l#*\?}"
+  elif [[ $l == code=* || $l == *\&code=* ]]; then
+    printf '%s\n' "$l"
+  elif [[ $l =~ ^[A-Za-z0-9/_%.-]{10,}$ ]]; then
+    printf 'code=%s\n' "$l"
+  else
+    return 1
+  fi
+}
+
 # cs_auth_login: interactive login (loopback; or paste the final URL when the browser cannot reach us).
 cs_auth_login() {
   local verifier challenge state redirect url out query line err code
@@ -405,7 +444,7 @@ cs_auth_login() {
   challenge=$(cs_pkce_challenge "$verifier")
   state=$(cs_random_token 24)
   out=$(mktemp)
-  if cs_listener_start "$out"; then
+  if [[ ${CS_LOGIN_NO_LISTENER:-0} != 1 ]] && cs_listener_start "$out"; then
     redirect="http://127.0.0.1:$CS_PORT/"
   else
     redirect="http://127.0.0.1:1/"
@@ -420,14 +459,12 @@ cs_auth_login() {
   while :; do
     if [[ -n $CS_LISTENER_PID ]] && ! kill -0 "$CS_LISTENER_PID" 2>/dev/null; then break; fi
     if [[ -t 0 ]]; then
-      if IFS= read -r -t 1 line && [[ $line == *\?* ]]; then
-        query=${line#*\?}
-        break
-      fi
+      if IFS= read -r -t 1 line && query=$(cs_login_query_of "$line"); then break; fi
+      query=
     elif [[ -z $CS_LISTENER_PID ]]; then
       IFS= read -r line || break
-      query=${line#*\?}
-      break
+      query=$(cs_login_query_of "$line") || query=
+      [[ -n $query ]] && break
     else
       sleep 1
     fi
@@ -440,7 +477,8 @@ cs_auth_login() {
     cs_say auth.timeout >&2
     return "$CS_EXIT_LOGIN"
   }
-  [[ $(cs_qs_get "$query" state) == "$state" ]] || {
+  # a bare code (typed by hand) carries no state: PKCE binds it to this login anyway
+  [[ -z $(cs_qs_get "$query" state) && -n $(cs_qs_get "$query" code) ]] || [[ $(cs_qs_get "$query" state) == "$state" ]] || {
     cs_say auth.state_mismatch >&2
     return "$CS_EXIT_LOGIN"
   }

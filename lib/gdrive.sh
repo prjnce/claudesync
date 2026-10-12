@@ -11,8 +11,9 @@ CS_GD_API=${CS_GD_API:-https://www.googleapis.com/drive/v3}
 CS_GD_UPLOAD=${CS_GD_UPLOAD:-https://www.googleapis.com/upload/drive/v3}
 CS_GD_FIELDS='id,name,mimeType,parents,appProperties,md5Checksum,size,createdTime,modifiedTime,trashed'
 CS_GD_MULTIPART_MAX=${CS_GD_MULTIPART_MAX:-5242880}   # <= 5 MB: multipart; larger: resumable
-CS_GD_CHUNK=${CS_GD_CHUNK:-8388608}                   # resumable chunk, a multiple of 256 KiB
+CS_GD_CHUNK=${CS_GD_CHUNK:-4194304}                   # resumable chunk (4 MiB), a multiple of 256 KiB
 CS_GD_RETRIES=${CS_GD_RETRIES:-5}
+CS_GD_NET_RETRIES=${CS_GD_NET_RETRIES:-3}                # tries for a request that got no answer at all
 CS_GD_BACKOFF_BASE=${CS_GD_BACKOFF_BASE:-1}           # seconds; tests set 0
 CS_GD_NORM='{id, name, mimeType, parents: (.parents // []), appProperties: (.appProperties // {}),
   md5Checksum: (.md5Checksum // null), size: (if .size then (.size | tonumber) else null end),
@@ -47,7 +48,7 @@ cs_gd() {
     cs_access_token_ensure "$rejected" || return
     code=$(nat curl -sS --connect-timeout 10 --max-time "${CS_GD_MAX_TIME:-300}" -X "$method" \
       -H "Authorization: Bearer $CS_ACCESS_TOKEN" -D "$(cs_to_win "$hdr")" -o "$(cs_to_win "$out")" \
-      -w '%{http_code}' "$@" "$url" 2>/dev/null) || code=000
+      -w '%{http_code}' "$@" "$url" 2>"$dir/err") || code=000
     case $code in
       2??)
         [[ -n ${GD_OUT:-} ]] || tr -d '\r' <"$body"
@@ -78,8 +79,11 @@ cs_gd() {
         cs_gd_backoff "$attempt"
         ;;
       000)
-        cs_log warn "drive: $method ${url%%\?*} -> network error"
-        return "$CS_DRV_NET"
+        # a request that never got an answer: try again a few times (uploads carry a pre-assigned id, so a repeat is safe)
+        attempt=$((attempt + 1))
+        cs_log warn "drive: $method ${url%%\?*} -> network error ($(head -c 200 "$dir/err" 2>/dev/null | tr -d '\r' | head -n 1)) attempt $attempt"
+        if ((attempt >= CS_GD_NET_RETRIES)); then return "$CS_DRV_NET"; fi
+        cs_gd_backoff "$attempt"
         ;;
       *)
         cs_log warn "drive: $method ${url%%\?*} -> $code $(cs_jq -r '.error.message // empty' <"$out" 2>/dev/null)"
@@ -178,7 +182,10 @@ cs_gd_upload() {
   fi
   ((rc == 0)) || return "$rc"
   r=$(cs_gd_norm <<<"$r")
-  cs_gd_check_md5 "$r" "$file" || return 1
+  cs_gd_check_md5 "$r" "$file" || {
+    cs_log warn "drive: the uploaded object $name does not have the md5 of the local file"
+    return 1
+  }
   printf '%s\n' "$r"
 }
 
@@ -233,8 +240,25 @@ cs_gd_upload_resumable() {
         ;;
       *)
         attempt=$((attempt + 1))
-        ((attempt > CS_GD_RETRIES)) && return "$CS_DRV_RETRY"
+        cs_log warn "drive: resumable chunk at $off of $size -> $code $(cs_jq -r '.error.message // empty' <"$(cs_gd_tmp)/body" 2>/dev/null | head -n 1) $(head -c 160 "$(cs_gd_tmp)/err" 2>/dev/null | tr -d '\r' | head -n 1) (attempt $attempt)"
+        if ((attempt > CS_GD_RETRIES)); then return "$CS_DRV_RETRY"; fi
         cs_gd_backoff "$attempt"
+        # the server may have kept part of the chunk: ask how much it has and go on from there
+        code=$(cs_gd_put_chunk "$uri" '*' "$size" /dev/null 0) || code=000
+        case $code in
+          308)
+            range=$(cs_gd_header range)
+            if [[ $range =~ bytes=0-([0-9]+) ]]; then off=$((BASH_REMATCH[1] + 1)); else off=0; fi
+            ;;
+          200 | 201)
+            cs_gd_finish_resumable
+            return
+            ;;
+          404 | 410)
+            [[ -n ${CS_GD_RESUME_FILE:-} ]] && : >"$CS_GD_RESUME_FILE"
+            return "$CS_DRV_NOTFOUND"
+            ;;
+        esac
         ;;
     esac
   done
@@ -257,13 +281,13 @@ cs_gd_put_chunk() {
     range="bytes */$size"
     nat curl -sS --connect-timeout 10 --max-time 60 -X PUT -H "Authorization: Bearer $CS_ACCESS_TOKEN" \
       -H "Content-Range: $range" -H 'Content-Length: 0' -D "$(cs_to_win "$dir/hdr")" -o "$(cs_to_win "$dir/body")" \
-      -w '%{http_code}' "$uri" 2>/dev/null
+      -w '%{http_code}' "$uri" 2>"$dir/err"
   else
     range="bytes $off-$((off + n - 1))/$size"
     tail -c +$((off + 1)) -- "$file" | head -c "$n" |
       nat curl -sS --connect-timeout 10 --max-time "${CS_GD_MAX_TIME:-300}" -X PUT \
         -H "Authorization: Bearer $CS_ACCESS_TOKEN" -H "Content-Range: $range" -H 'Content-Type: application/octet-stream' \
-        --data-binary @- -D "$(cs_to_win "$dir/hdr")" -o "$(cs_to_win "$dir/body")" -w '%{http_code}' "$uri" 2>/dev/null
+        --data-binary @- -D "$(cs_to_win "$dir/hdr")" -o "$(cs_to_win "$dir/body")" -w '%{http_code}' "$uri" 2>"$dir/err"
   fi
 }
 

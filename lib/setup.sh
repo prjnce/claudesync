@@ -177,9 +177,81 @@ cs_setup_step_repair() {
 }
 
 # Step 8: which folders are synced, and the projects other machines already sync (SPEC §6.1).
+# cs_setup_project_items: "kind<TAB>key<TAB>alias<TAB>root<TAB>id<TAB>sessions<TAB>bytes" for every project that uses Claude on
+# this machine: the mapped ones first (kind m, key = project_id), then the folders not mapped yet (kind u, key = root).
+cs_setup_project_items() {
+  local counts id root alias en n b last='' seen=' '
+  counts=$(cs_project_session_counts)
+  while IFS=$'\t' read -r id root alias _ _ en _; do
+    [[ -n $id && $id != "$last" ]] || continue
+    last=$id
+    IFS=$'\t' read -r _ n b < <(printf '%s\n' "$counts" | I=$id "$CS_AWK" -F'\t' '$1 == ENVIRON["I"]' | grep . || printf 'x\t0\t0\n')
+    printf 'm\t%s\t%s\t%s\t%s\t%s\t%s\n' "$id" "$alias" "$root" "$id" "$n" "$b"
+  done < <(cs_tsv_rows projects | LC_ALL=C sort -t "$(printf '\t')" -k1,1 -s)
+  while IFS=$'\t' read -r root n b; do
+    [[ -n $root ]] || continue
+    printf 'u\t%s\t%s\t%s\t-\t%s\t%s\n' "$root" "${root##*[\\/]}" "$root" "$n" "$b"
+  done < <(cs_unmapped_roots)
+}
+
+# Step 8: one numbered list of everything that uses Claude here; the user picks what is synced (Enter = all).
+cs_setup_choose_projects() {
+  local items i=0 kind key alias root id n b ans tries=0 line
+  local -a kinds=() keys=() aliases=() roots=() sel=()
+  items=$(cs_setup_project_items)
+  if [[ -z $items ]]; then
+    cs_say setup.projects_none
+    return 0
+  fi
+  cs_say setup.projects_header
+  while IFS=$'\t' read -r kind key alias root id n b; do
+    i=$((i + 1))
+    kinds+=("$kind") keys+=("$key") aliases+=("$alias") roots+=("$root")
+    printf '  %s. %s %s %s %s %s\n' "$i" "$(cs_pad "$alias:" 18)" "$(cs_pad "$root" 28)" "$(cs_pad "$id" 9)" "$(cs_pad "$n" 5)" "$(cs_human_bytes "$b")"
+  done <<<"$items"
+  while ((tries < 3)); do
+    tries=$((tries + 1))
+    ans=$(cs_ask setup.projects_choose "")
+    sel=()
+    if [[ -z $ans || ${ans,,} == all || ${ans,,} == a ]]; then
+      for ((n = 1; n <= i; n++)); do sel[n]=1; done
+      break
+    fi
+    local bad=0 tok
+    local IFS=', '
+    for tok in $ans; do
+      if [[ $tok =~ ^[0-9]+$ ]] && ((tok >= 1 && tok <= i)); then sel[tok]=1; else bad=1; fi
+    done
+    unset IFS
+    ((bad)) || break
+    sel=()
+    cs_say setup.bad_choice >&2
+  done
+  ((${#sel[@]})) || return 0
+  local chosen=0
+  for ((n = 1; n <= i; n++)); do
+    [[ -n ${sel[n]:-} ]] && chosen=$((chosen + 1))
+    if [[ ${kinds[n - 1]} == m ]]; then
+      cs_project_set_enabled "${keys[n - 1]}" "$([[ -n ${sel[n]:-} ]] && echo 1 || echo 0)"
+    elif [[ -n ${sel[n]:-} ]]; then
+      alias=${aliases[n - 1]}
+      if cs_project_find "$alias" >/dev/null 2>&1; then alias="$alias-$n"; fi
+      IFS=$'\t' read -r id _ _ < <(cs_project_map "$alias" "${roots[n - 1]}")
+      cs_say projects.mapped "$alias" "$id" "${roots[n - 1]}"
+    fi
+  done
+  if ((chosen == i)); then
+    cs_config_set mode all
+    cs_say setup.projects_mode_all
+  else
+    cs_config_set mode selected
+    cs_say setup.projects_mode_selected
+  fi
+}
+
 cs_setup_step_projects() {
   cs_heading setup.h_projects
-  cs_projects_select
+  cs_setup_choose_projects
   if declare -F cs_eng_fetch_remotes >/dev/null && cs_eng_load 2>/dev/null; then
     cs_eng_fetch_remotes
     CS_RUN_REMOTE_FAIL=0 cs_pend_detect || true
@@ -194,6 +266,14 @@ cs_setup_step_retention() {
   days=$(cs_claude_retention_days)
   if [[ $days == 0 ]] || ((days >= 3650)); then
     cs_say setup.retention_ok "$days"
+    cs_confirm setup.retention_keep y "$days" && return 0
+    days=$(cs_ask setup.retention_ask_days 3650)
+    if [[ $days =~ ^[0-9]+$ ]]; then
+      cs_claude_settings_set cleanupPeriodDays "$((10#$days))"
+      cs_say setup.retention_value "$((10#$days))"
+    else
+      cs_say setup.bad_choice >&2
+    fi
     return 0
   fi
   if cs_confirm setup.ask_retention y "$days"; then

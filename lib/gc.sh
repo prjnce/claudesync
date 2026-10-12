@@ -150,5 +150,6 @@ cs_gc_archive() {
     new_e=$(cs_jq -c --argjson p "$path" --arg id "$k" --arg m "$CS_ME" 'setpath($p + ["id"]; $id) | setpath($p + ["m"]; $m)' <<<"$new_e")
   done < <(cs_jq -r '. as $r | [paths(type == "object" and has("id") and (.id | type == "string") and (.id | length > 0))] | .[] as $p | [($p | tojson), ($r | getpath($p).id), ($r | getpath($p).sha // "x0000000000000000")] | @tsv' <<<"$e")
   rm -f -- "$tmp"
-  cs_eng_my_manifest_save "$(cs_jq -c --arg m "$mid" --arg s "$sid" --argjson e "$new_e" '.archive[$m][$s] = $e' <<<"$(cs_eng_my_manifest)")"
+  cs_eng_my_manifest_save "$({ cs_eng_my_manifest; printf '%s\n' "$new_e"; } | cs_jq -cs --arg m "$mid" --arg s "$sid" \
+    '.[0] as $m0 | .[1] as $e | $m0 | .archive[$m][$s] = $e')"
 }
