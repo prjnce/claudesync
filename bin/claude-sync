@@ -18,6 +18,7 @@ unset cs_src cs_bin_dir
 
 # shellcheck source=lib/core.sh
 source "$CS_APP_DIR/lib/core.sh"
+cs_fix_stdin
 
 cs_usage() {
   cs_say usage

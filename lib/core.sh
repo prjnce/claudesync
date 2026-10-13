@@ -152,6 +152,13 @@ cs_bootstrap() {
   fi
 }
 
+# cs_fix_stdin: a process the hidden launcher.exe starts has no usable descriptor 0 (/dev/stdin does not exist), and
+# then md5sum/sha256sum on a file fail with "Bad file descriptor" (an empty hash, so every upload looked corrupt).
+# Point stdin at /dev/null in that case; a tty, pipe, file or device is left alone.
+cs_fix_stdin() {
+  [[ -e /dev/stdin ]] || exec 0</dev/null
+}
+
 # cs_log LEVEL MSG...: append "ISO-local-time-with-offset trigger level msg" to the log (only if logs/ exists);
 # warn/error also go to stderr, info/debug only with CS_VERBOSE=1. Never pass secrets here.
 cs_log() {

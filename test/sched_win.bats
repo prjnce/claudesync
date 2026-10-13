@@ -120,6 +120,25 @@ xml() {
   [[ $output != *"No such file"* ]]
 }
 
+@test "md5sum of a file works under launcher.exe once cs_fix_stdin has run" {
+  cs_is_windows || skip "Windows only"
+  CS_APP_DIR=$CS_ROOT
+  run bash -c 'source "$CS_ROOT/lib/core.sh"; cs_bootstrap; source "$CS_ROOT/lib/platform.sh"; source "$CS_ROOT/lib/store.sh"
+    CS_APP_DIR=$CS_ROOT; source "$CS_ROOT/lib/ui.sh"; source "$CS_ROOT/lib/scheduler.sh"; unset CS_SCHED_NATIVE_PREFIX; cs_sched_win_build_launcher'
+  [ "$status" -eq 0 ]
+  L="$CLAUDE_SYNC_HOME/bin/launcher.exe"
+  export MSYS2_ARG_CONV_EXCL='*'
+  printf 'hello\n' >"$BATS_TEST_TMPDIR/data"
+  # the launcher passes its command line through raw (no single-quote handling): use a script file
+  cat >"$BATS_TEST_TMPDIR/probe.sh" <<'EOF'
+source "$1/lib/core.sh"
+cs_fix_stdin
+md5sum -- "$2" >"$3" 2>&1
+EOF
+  run "$L" "$(cygpath -w "$(command -v bash)")" --noprofile --norc "$BATS_TEST_TMPDIR/probe.sh" "$CS_ROOT" "$BATS_TEST_TMPDIR/data" "$BATS_TEST_TMPDIR/after"
+  grep -q 'b1946ac92492d2347c6235b4d2611184' "$BATS_TEST_TMPDIR/after"
+}
+
 @test "launcher.exe: runs hidden, waits, returns the child's exit code, prints real paths" {
   cs_is_windows || skip "Windows only"
   CS_APP_DIR=$CS_ROOT
