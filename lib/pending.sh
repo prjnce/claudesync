@@ -209,7 +209,7 @@ cs_pend_detect() {
       nm[$id]+="${nm[$id]:+,}$name"
       nroots[$id]+="${nroots[$id]:+|}$roots"
       nkeys[$id]+="${nkeys[$id]:+,}$keys"
-    done < <(cs_jq -r '.projects // {} | to_entries[] | [.key, .value.alias, (.value.roots | join("|")), (.value.remote_keys | join(","))] | @tsv' "$f")
+    done < <(cs_jq -r '.projects // {} | to_entries[] | [.key, .value.alias, (.value.roots | join("|")), (.value.remote_keys | join(","))] | map(gsub("[\t\n]"; " ")) | join("\t")' "$f")
     while IFS=$'\t' read -r id n bytes; do
       [[ -n $id && -z ${mapped[$id]:-} && -n ${nalias[$id]:-} ]] || continue
       nsess[$id]=$((${nsess[$id]:-0} + n))
@@ -339,6 +339,35 @@ cs_pend_precheck() {
   return 0
 }
 
+# cs_pend_project_at PATH: id of the local project that has PATH itself as a root (not a folder inside or around it).
+cs_pend_project_at() {
+  local id root
+  while IFS=$'\t' read -r id root _; do
+    [[ -n $id ]] || continue
+    if cs_path_under "$1" "$root" && cs_path_under "$root" "$1"; then
+      printf '%s\n' "$id"
+      return 0
+    fi
+  done < <(cs_tsv_rows projects)
+  return 1
+}
+
+# cs_pend_take_remote KEY ALIAS PATH: map the remote project KEY at PATH. When PATH is already the root of a local
+# project (two machines each made their own project for one folder), that is one project: the local one takes the
+# remote project_id, so the sessions of both machines join.
+cs_pend_take_remote() {
+  local key=$1 alias=$2 path=$3 own oalias
+  if own=$(cs_pend_project_at "$path") && [[ $own != "$key" ]]; then
+    oalias=$(cs_tsv_rows projects | I=$own "$CS_AWK" -F'\t' '$1 == ENVIRON["I"] { print $3; exit }')
+    cs_confirm pending.confirm_same y "$path" "$oalias" "$own" || return 1
+    cs_project_rekey "$own" "$key" || return 1
+    cs_say pending.rekeyed "$oalias" "$own" "$key"
+  else
+    cs_pend_precheck "$path" || return 1
+  fi
+  cs_pend_apply remote "$key" "$alias" "$path"
+}
+
 # cs_pend_decide KIND KEY DECISION: skip (remember the session count) or exclude for good.
 cs_pend_decide() {
   cs_pend_row_get "$1" "$2" || return 1
@@ -375,11 +404,18 @@ cs_pend_review() {
         x) cs_pend_decide "$kind" "$key" excluded && break ;;
         p)
           path=$(cs_ask pending.ask_path "")
-          cs_pend_precheck "$path" || continue
-          cs_pend_apply "$kind" "$key" "$alias" "$path" && break
+          if [[ $kind == remote ]]; then
+            cs_pend_take_remote "$key" "$alias" "$path" && break
+          else
+            cs_pend_precheck "$path" || continue
+            cs_pend_apply "$kind" "$key" "$alias" "$path" && break
+          fi
           ;;
         r)
-          [[ $kind == local ]] || continue
+          [[ $kind == local ]] || {
+            cs_say pending.r_local_only >&2
+            continue
+          }
           id=$(cs_ask pending.ask_project "")
           id=$(cs_project_find "$id") || {
             cs_say projects.unknown "$id" >&2
@@ -391,8 +427,7 @@ cs_pend_review() {
           if [[ $ans =~ ^[0-9]+$ ]] && ((ans >= 1 && ans <= ${#cl[@]})); then
             path=${cl[ans - 1]}
             if [[ $kind == remote ]]; then
-              cs_pend_precheck "$path" || continue
-              cs_pend_apply remote "$key" "$alias" "$path" && break
+              cs_pend_take_remote "$key" "$alias" "$path" && break
             else
               cs_project_map "$path" "$key" >/dev/null && cs_tsv_delete pending_map local "$key" && break
             fi

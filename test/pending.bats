@@ -159,3 +159,43 @@ sj() { jq -c "$2" "$SIM/$1/home/.claude-sync/state/status.json" | tr -d '\r'; }
   run sim_run B
   [[ $output == *'1 installed'* ]]
 }
+
+# B already has its own project q9 on the folder A's project p1 maps to: one project that two machines named separately.
+b_own_project() {
+  sim_exec B 'r=$(cs_native_path "$1"); cs_tsv_upsert projects q9 "$r" Mine "$r" "$2" 1 ""' "$SIM/B/projects/TransFlowY" "$SIM/B/claude/mem"
+  sim_write A D--Projects-TransFlow "$SID" "$(aline 1)"
+  sim_run A >/dev/null
+  for i in 1 2; do sim_run B >/dev/null; done
+}
+
+@test "the remote project's candidate is already the root of a local project: confirming gives that project the remote project_id" {
+  b_own_project
+  [ "$(sj B '.waiting_map | length')" = 1 ]
+  printf '1\n\n' | sim_cli B projects map
+  [ "$(sim_exec B 'cs_tsv_rows projects | cut -f1,3' | tr -d '\r')" = $'p1\tMine' ]
+  [ -z "$(pend B | grep '^remote')" ]
+  run sim_run B
+  [[ $output == *'1 installed'* ]]
+}
+
+@test "declining the same-project question does not trap the wizard: skip leaves the id alone" {
+  b_own_project
+  printf '1\nn\ns\n' | sim_cli B projects map
+  [ "$(sim_exec B 'cs_tsv_rows projects | cut -f1' | tr -d '\r')" = q9 ]
+  [[ $(pend B) == remote*skipped* ]]
+}
+
+@test "the project id is not changed once sessions of the project were synced" {
+  b_own_project
+  sim_exec B 'cs_eng_row_set "$1" q9 x 1 1 1 sha - synced' "$SID"
+  run sim_exec B 'cs_project_rekey q9 p1'
+  [ "$status" -eq 1 ]
+  [[ $output == *'already synced'* ]]
+  [ "$(sim_exec B 'cs_tsv_rows projects | cut -f1' | tr -d '\r')" = q9 ]
+}
+
+@test "a launch dir that is an unresolved token is never offered as a folder" {
+  sim_write B P-488f46b7 "$SID" '{"type":"user","cwd":"{P:488f46b7}"}'
+  run sim_exec B 'cs_unmapped_roots'
+  [ -z "$output" ]
+}

@@ -295,6 +295,41 @@ cs_project_map() {
   printf '%s\t%s\t%s\n' "$id" "$root" "$state"
 }
 
+# cs_project_published ID: rc 0 if anything of project ID already left this machine's state (a session row, a
+# manifest session or memory scope, memory base files). Published segments carry {P:id} tokens, so such a
+# project can no longer change its id.
+cs_project_published() {
+  local id=$1 m
+  cs_tsv_rows sessions | I=$id "$CS_AWK" -F'\t' '$2 == ENVIRON["I"] { f = 1 } END { exit !f }' && return 0
+  [[ -d $CS_HOME/state/base/mem/$id ]] && [[ -n $(find "$CS_HOME/state/base/mem/$id" -type f -print -quit 2>/dev/null) ]] && return 0
+  m="$CS_HOME/state/manifest.json" # read directly: this file is also used by commands that do not load the engine
+  [[ -f $m ]] || return 1
+  cs_jq -e --arg p "$id" '([(.sessions // {})[] | select(.project == $p)] | length > 0) or ((.memory // {}) | has($p))' "$m" >/dev/null 2>&1
+}
+
+# cs_project_rekey OLD_ID NEW_ID: give a local project the project_id of the same project on another machine.
+# Only while nothing of OLD_ID was published (cs_project_published); rc 1 with a message otherwise.
+cs_project_rekey() {
+  local old=$1 new=$2 rows root
+  [[ $new =~ ^[A-Za-z0-9_-]+$ ]] || cs_die_t "$CS_EXIT_ERROR" projects.unknown "$new"
+  cs_tsv_rows projects | cut -f1 | grep -qx -- "$old" || cs_die_t "$CS_EXIT_ERROR" projects.unknown "$old"
+  [[ $old == "$new" ]] && return 0
+  if cs_tsv_rows projects | cut -f1 | grep -qx -- "$new"; then
+    cs_say projects.rekey_exists "$new" >&2
+    return 1
+  fi
+  if cs_project_published "$old"; then
+    cs_say projects.rekey_published "$old" >&2
+    return 1
+  fi
+  # Read everything first: rewriting a file another process still reads fails on Windows.
+  rows=$(cs_tsv_rows projects | I=$old N=$new "$CS_AWK" -F'\t' -v OFS='\t' '$1 == ENVIRON["I"] { old = $1; $1 = ENVIRON["N"]; print old, $0 }')
+  while IFS=$'\t' read -r _ _ root _; do
+    [[ -n $root ]] && cs_tsv_delete projects "$old" "$root"
+  done <<<"$rows"
+  printf '%s\n' "$rows" | cut -f2- | cs_tsv_upsert_many projects
+}
+
 # cs_project_unmap ALIAS_OR_ID [PATH]: remove one root, or every root of the project.
 cs_project_unmap() {
   local id root

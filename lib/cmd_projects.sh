@@ -10,6 +10,8 @@ cs_unmapped_roots() {
   cs_launch_cache_init
   while IFS=$'\t' read -r cwd n b; do
     [[ -n $cwd ]] || continue
+    # an unresolved token ({P:id}, {R:id}, {MEM:id}) is not a folder: no project can be made of it
+    [[ $cwd == \{[PRM]*:*\}* ]] && continue
     cs_project_of_cwd "$cwd" >/dev/null 2>&1 && continue
     root=$(cs_root_of_launch "$cwd")
     printf '%s\t%s\t%s\n' "$root" "$n" "$b"
