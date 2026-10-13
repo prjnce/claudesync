@@ -9,7 +9,8 @@ shopt -s inherit_errexit
 
 cs_src=${BASH_SOURCE[0]}
 case $cs_src in
-  */*) cs_bin_dir=${cs_src%/*} ;;
+  # a Windows task passes "C:\...\bin\claude-sync" (backslashes only): cut at either separator
+  */* | *\\*) cs_bin_dir=${cs_src%[/\\]*} ;;
   *) cs_bin_dir=. ;;
 esac
 CS_APP_DIR=$(cd -- "$cs_bin_dir/.." && pwd -P)

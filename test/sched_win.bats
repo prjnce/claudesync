@@ -112,6 +112,14 @@ xml() {
   grep -q 'schtasks /Run /TN claude-sync' "$CALLS"
 }
 
+@test "entrypoint started by a Windows path with backslashes finds its app dir from any cwd" {
+  cs_is_windows || skip "Windows only"
+  cd "$BATS_TEST_TMPDIR"
+  run bash "$(cygpath -w "$CS_ROOT/bin/claude-sync")" --version
+  [ "$status" -eq 0 ]
+  [[ $output != *"No such file"* ]]
+}
+
 @test "launcher.exe: runs hidden, waits, returns the child's exit code, prints real paths" {
   cs_is_windows || skip "Windows only"
   CS_APP_DIR=$CS_ROOT
