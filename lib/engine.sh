@@ -339,6 +339,13 @@ cs_eng_move() {
 cs_eng_install() {
   local sid=$1 entry=$2 dir=${3:-} ilen=${4:-0} base=${5:-} pid start=0 n i f tmp jr sig sig2 mt
   pid=$(cs_jq -r '.project // empty' <<<"$entry")
+  # The segments carry {P:<id of the publishing machine's project>}: written into a file here without a row for
+  # that id, the token stays in the transcript (cwd = "{P:id}"). Two machines that each made their own project
+  # for one folder end up here, so the remote id must be a mapped project of this machine first.
+  if [[ -n $pid && $pid != unmapped ]] && ! cs_tsv_rows projects | cut -f1,6 | grep -qx "$pid"$'\t'1; then
+    cs_log warn "run: $sid belongs to project $pid, which is not mapped here; not installed (claude-sync projects pending)"
+    return 1
+  fi
   if [[ -z $dir ]]; then
     dir=$(cs_eng_place "$pid" "$(cs_eng_local_path "$(cs_jq -r '.launch // empty' <<<"$entry")")") || return 1
   fi

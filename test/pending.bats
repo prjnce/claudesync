@@ -199,3 +199,11 @@ b_own_project() {
   run sim_exec B 'cs_unmapped_roots'
   [ -z "$output" ]
 }
+
+@test "an entry of a project that is not mapped here is never installed: its {P:id} token would stay in the transcript" {
+  mkdir -p "$SIM/B/claude/projects/slugB"
+  run sim_exec B 'cs_eng_install "$1" "{\"project\":\"p1\",\"lines\":1,\"segs\":[]}" slugB' "$SID"
+  [ "$status" -eq 1 ]
+  [ ! -e "$SIM/B/claude/projects/slugB/$SID.jsonl" ]
+  grep -q "belongs to project p1, which is not mapped here" "$SIM/B/home/.claude-sync/logs/claude-sync.log"
+}
