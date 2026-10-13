@@ -152,12 +152,12 @@ cs_bootstrap() {
   fi
 }
 
-# cs_log LEVEL MSG...: append "ISO-UTC trigger level msg" to the log (only if logs/ exists);
+# cs_log LEVEL MSG...: append "ISO-local-time-with-offset trigger level msg" to the log (only if logs/ exists);
 # warn/error also go to stderr, info/debug only with CS_VERBOSE=1. Never pass secrets here.
 cs_log() {
   local level=$1 ts line
   shift
-  TZ=UTC printf -v ts '%(%Y-%m-%dT%H:%M:%SZ)T' -1
+  printf -v ts '%(%Y-%m-%dT%H:%M:%S%z)T' -1
   line="$ts trigger=$CS_TRIGGER level=$level $*"
   if [[ -n ${CS_HOME:-} && -d $CS_HOME/logs ]]; then
     printf '%s\n' "$line" >>"$CS_HOME/logs/claude-sync.log"

@@ -73,13 +73,19 @@ setup() {
   [ "$(cat "$f")" = old ]
 }
 
-@test "log lines are UTC ISO, carry trigger and level, and only go to an existing logs dir" {
+@test "log lines are local ISO time with a UTC offset, carry trigger and level, and only go to an existing logs dir" {
   cs_log info "no dir yet"
   [ ! -e "$CLAUDE_SYNC_HOME/logs/claude-sync.log" ]
   mkdir -p "$CLAUDE_SYNC_HOME/logs"
   CS_TRIGGER=timer cs_log info "hello world"
   line=$(cat "$CLAUDE_SYNC_HOME/logs/claude-sync.log")
-  [[ $line =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\ trigger=timer\ level=info\ hello\ world$ ]]
+  [[ $line =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{4}\ trigger=timer\ level=info\ hello\ world$ ]]
+}
+
+@test "log timestamps follow the machine time zone" {
+  mkdir -p "$CLAUDE_SYNC_HOME/logs"
+  TZ=Etc/GMT-7 cs_log info zone
+  [[ $(cat "$CLAUDE_SYNC_HOME/logs/claude-sync.log") == *'+0700 trigger='* ]]
 }
 
 @test "warn goes to stderr, info is silent unless verbose" {
