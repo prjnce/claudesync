@@ -189,3 +189,28 @@ setup() {
   run cli repair --frob
   [ "$status" -eq 2 ]
 }
+
+@test "repair puts the folder back where a {P:id} token stayed in the cwd (mapped id only; chat text and unmapped ids are left alone)" {
+  ID=$(cs_project_find X | tr -d '\r')
+  mkdir -p "$P/$SLUG/t1/subagents"
+  printf '%s\n' '{"type":"user","cwd":"{P:'"$ID"'}","n":1}' '{"type":"user","cwd":"{P:'"$ID"'}","n":2,"message":{"content":"say {P:'"$ID"'} here"}}' >"$P/$SLUG/t1.jsonl"
+  printf '%s\n' '{"type":"user","cwd":"{P:'"$ID"'}","isSidechain":true}' >"$P/$SLUG/t1/subagents/agent-t.jsonl"
+  printf '%s\n' '{"type":"user","cwd":"{P:deadbeef}","n":1}' >"$P/$SLUG/t2.jsonl"
+  printf '%s\n' '{"type":"user","cwd":"'"$(cs_json_escape "$ROOT")"'","message":{"content":"say {P:'"$ID"'} here"}}' >"$P/$SLUG/t3.jsonl"
+  cp -p "$P/$SLUG/t2.jsonl" "$T/t2.orig"
+  cp -p "$P/$SLUG/t3.jsonl" "$T/t3.orig"
+  touch -d @1790000000 "$P/$SLUG/t1.jsonl"
+  run cs_repair --dry-run
+  [ "$status" -eq 0 ]
+  grep -q "{P:$ID}" "$P/$SLUG/t1.jsonl"
+  run cs_repair --yes
+  [ "$status" -eq 0 ]
+  [[ $output == *"2 of 2 transcripts got their folder back"* ]]
+  [ "$(head -n 1 "$P/$SLUG/t1.jsonl" | jq -r .cwd | tr -d '\r')" = "$ROOT" ]
+  [ "$(head -n 1 "$P/$SLUG/t1/subagents/agent-t.jsonl" | jq -r .cwd | tr -d '\r')" = "$ROOT" ]
+  cmp "$P/$SLUG/t2.jsonl" "$T/t2.orig"
+  cmp "$P/$SLUG/t3.jsonl" "$T/t3.orig"
+  [ "$(stat -c %Y "$P/$SLUG/t1.jsonl")" = 1790000000 ]
+  run cs_repair --yes
+  [[ $output != *"got their folder back"* ]]
+}

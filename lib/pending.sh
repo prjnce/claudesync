@@ -362,6 +362,12 @@ cs_pend_take_remote() {
     cs_confirm pending.confirm_same y "$path" "$oalias" "$own" || return 1
     cs_project_rekey "$own" "$key" || return 1
     cs_say pending.rekeyed "$oalias" "$own" "$key"
+    # Transcripts installed under the remote id before it was mapped here still hold {P:id} in their cwd.
+    if declare -F cs_repair_token_files >/dev/null; then
+      local ntok
+      ntok=$(cs_repair_token_files " " | grep -c . || true)
+      ((ntok)) && cs_say pending.tokens_hint "$ntok"
+    fi
   else
     cs_pend_precheck "$path" || return 1
   fi

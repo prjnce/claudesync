@@ -272,6 +272,66 @@ cs_repair_orig_of() {
   printf '\n'
 }
 
+# cs_repair_token_files LIVE_SET: "rel" of every transcript whose cwd is still an unresolved path token ({P:id}, {R:id},
+# {MEM:id}) of a project that is mapped here. Such a file was installed from another machine whose project_id for the
+# folder differed from ours (the engine now refuses that), so the token never became the folder. Only a cwd field counts:
+# chat text that merely mentions a token is left alone. LIVE_SET is " sid sid " (open sessions are skipped).
+cs_repair_token_files() {
+  local live=$1 rel size f id ok
+  while IFS=$'\t' read -r rel size; do
+    [[ -n $rel ]] || continue
+    f="$(cs_claude_dir)/projects/$rel"
+    grep -q -E '"(cwd|relocatedCwd)": ?"\{(P|R|MEM):[A-Za-z0-9_-]+\}' "$f" || continue
+    [[ $live == *" $(cs_repair_sid_of "$rel") "* ]] && continue
+    ok=0
+    while IFS= read -r id; do
+      cs_tsv_rows projects | cut -f1,6 | grep -qx -- "$id"$'\t'1 && ok=1
+    done < <(grep -o -E '"(cwd|relocatedCwd)": ?"\{(P|R|MEM):[A-Za-z0-9_-]+\}' "$f" | sed -E 's/.*\{(P|R|MEM):([A-Za-z0-9_-]+)\}$/\2/' | sort -u)
+    ((ok)) && printf '%s\n' "$rel"
+  done < <(cs_repair_files)
+  return 0
+}
+
+# cs_repair_tokens DRY BACKUP_DIR REL...: put the folder back in place of the tokens (transform "local" with this machine's
+# project rows), keeping the mtime and a backup. Prints the number of files changed; a failed line/CR check keeps the file.
+cs_repair_tokens() {
+  local dry=$1 bdir=$2 rows rel f out n=0 l1 l2 c1 c2 jr=''
+  shift 2
+  rows=$(cs_project_rows)
+  for rel in "$@"; do
+    f="$(cs_claude_dir)/projects/$rel"
+    out="$f.csync-tmp"
+    jr=''
+    ((dry)) || jr=$(cs_journal_begin repair "$(cs_jq -nc --arg f "$f" --arg t "$out" '{file: $f, tmp: [$t]}')")
+    cs_transform_file local "$rows" "$f" "$out" || {
+      rm -f -- "$out"
+      [[ -n $jr ]] && cs_journal_end "$jr"
+      continue
+    }
+    l1=$(wc -l <"$f")
+    l2=$(wc -l <"$out")
+    c1=$(tr -cd '\r' <"$f" | wc -c)
+    c2=$(tr -cd '\r' <"$out" | wc -c)
+    if ((l1 != l2 || c1 != c2)) || cmp -s -- "$f" "$out"; then
+      rm -f -- "$out"
+      [[ -n $jr ]] && cs_journal_end "$jr"
+      continue
+    fi
+    if ((dry)); then
+      rm -f -- "$out"
+    else
+      mkdir -p -- "$bdir/projects/${rel%/*}"
+      cp -p -- "$f" "$bdir/projects/$rel"
+      touch -r "$f" -- "$out"
+      mv -f -- "$out" "$f"
+      cs_journal_end "$jr"
+      cs_log info "repair: replaced unresolved path tokens in $rel"
+    fi
+    n=$((n + 1))
+  done
+  printf '%s\n' "$n"
+}
+
 # cs_repair [--dry-run] [--yes] [--project NAME]: the command (SPEC §19).
 cs_repair() {
   local dry=0 yes=0 project='' a
@@ -354,9 +414,10 @@ cs_repair() {
     fi
   fi
 
-  local junk
+  local junk tokfiles
   junk=$(cs_claude_junk_dirs)
-  ((${#todo[@]} || ${#skipped_live[@]})) || [[ -n $junk ]] || {
+  tokfiles=$(cs_repair_token_files "$live")
+  ((${#todo[@]} || ${#skipped_live[@]})) || [[ -n $junk || -n $tokfiles ]] || {
     cs_say repair.nothing
     return 0
   }
@@ -399,6 +460,15 @@ cs_repair() {
     fi
   done
   for rel in "${skipped_live[@]}"; do cs_say repair.skipped_live "$rel"; done
+
+  if [[ -n $tokfiles ]]; then
+    local -a tf=()
+    mapfile -t tf <<<"$tokfiles"
+    cs_heading repair.h_tokens
+    local tn
+    tn=$(cs_repair_tokens "$dry" "$bdir" "${tf[@]}")
+    if ((dry)); then cs_say repair.tokens_would "$tn" "${#tf[@]}"; else cs_say repair.tokens_fixed "$tn" "${#tf[@]}"; fi
+  fi
 
   if [[ -n $junk ]]; then
     cs_heading repair.h_junk
