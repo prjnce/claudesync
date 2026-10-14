@@ -183,3 +183,80 @@ kinds() { jq -r --arg k "$1" 'select(.appProperties.csKind == $k) | .name' "$SIM
     [[ $output == *'0 installed, 0 published'* ]] || { echo "$m: $output"; return 1; }
   done
 }
+
+# --- a subagent transcript that both machines already have and that has no base yet (SPEC §12.2 for subagents) ---
+
+# b_main: the same main transcript as a_fixture, already on B (cwd in B's folder).
+b_main() {
+  sim_write B "$BSLUG" "$SID" "$(printf '{"type":"user","uuid":"u-1","cwd":"%s"}' "$BROOT")" "$(printf '{"type":"user","uuid":"u-2","cwd":"%s"}' "$BROOT")"
+}
+# b_agent N...: B's own subagent transcript with the given lines (cwd in B's folder)
+b_agent() {
+  local d="$BCC/projects/$BSLUG/$SID/subagents" n
+  mkdir -p "$d"
+  : >"$d/agent-a1.jsonl"
+  for n in "$@"; do printf '{"type":"user","uuid":"g-%s","cwd":"%s/apps"}\n' "$n" "$BROOT" >>"$d/agent-a1.jsonl"; done
+}
+blog() { cat "$SIM/B/home/.claude-sync/logs/claude-sync.log"; }
+settled() {
+  local m
+  for m in A B A B; do
+    run sim_run "$m"
+    [[ $output == *'0 installed, 0 published'* ]] || { echo "$m: $output"; return 1; }
+  done
+}
+
+@test "subagent without a base: an identical copy on both machines adopts the base, later appends flow both ways" {
+  a_fixture
+  sim_run A >/dev/null
+  b_main
+  b_agent 1 2
+  sim_run B >/dev/null
+  if blog | grep -q 'deferred'; then return 1; fi
+  settled
+  printf '{"type":"user","uuid":"g-3","cwd":"%s/apps"}\n' "$BROOT" >>"$BCC/projects/$BSLUG/$SID/subagents/agent-a1.jsonl"
+  sim_run B >/dev/null
+  sim_run A >/dev/null
+  [ "$(wc -l <"$ACC/projects/$ASLUG/$SID/subagents/agent-a1.jsonl")" -eq 3 ]
+  settled
+}
+
+@test "subagent without a base: a local copy longer than the remote one publishes only its tail" {
+  a_fixture
+  sim_run A >/dev/null
+  b_main
+  b_agent 1 2 3
+  sim_run B >/dev/null
+  if blog | grep -q 'deferred'; then return 1; fi
+  sim_run A >/dev/null
+  [ "$(wc -l <"$ACC/projects/$ASLUG/$SID/subagents/agent-a1.jsonl")" -eq 3 ]
+  grep -qF 'g-3' "$ACC/projects/$ASLUG/$SID/subagents/agent-a1.jsonl"
+  settled
+}
+
+@test "subagent without a base: a local copy that is a prefix of the remote one is brought up to date" {
+  a_fixture
+  sim_run A >/dev/null
+  b_main
+  b_agent 1
+  sim_run B >/dev/null
+  if blog | grep -q 'deferred'; then return 1; fi
+  fb="$BCC/projects/$BSLUG/$SID/subagents/agent-a1.jsonl"
+  [ "$(wc -l <"$fb")" -eq 2 ]
+  grep -qF "\"cwd\":\"$BROOT/apps\"" "$fb"
+  settled
+}
+
+@test "subagent without a base: unrelated content on both machines is left alone and reported" {
+  a_fixture
+  sim_run A >/dev/null
+  b_main
+  b_agent 7 8
+  before=$(cat "$BCC/projects/$BSLUG/$SID/subagents/agent-a1.jsonl")
+  sim_run B >/dev/null
+  sim_run B >/dev/null
+  blog | grep -q 'agent-a1 of .* differs from .* deferred'
+  [ "$(cat "$BCC/projects/$BSLUG/$SID/subagents/agent-a1.jsonl")" = "$before" ]
+  [ "$(wc -l <"$ACC/projects/$ASLUG/$SID/subagents/agent-a1.jsonl")" -eq 2 ]
+  grep -qF 'g-1' "$ACC/projects/$ASLUG/$SID/subagents/agent-a1.jsonl"
+}

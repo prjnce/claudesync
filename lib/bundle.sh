@@ -377,6 +377,71 @@ cs_bundle_remote_install() {
 
 cs_agent_dir() { printf '%s\n' "$CS_HOME/state/agents/$1"; }
 
+# cs_agent_init SID AGENT FILE: SPEC §12.2 for a subagent transcript that exists here and on other machines but
+# has no base yet. Compares the canonical bytes of the file with the full content of each remote version (most
+# segments first) and sets CS_AGENT_INIT:
+#   equal    same content: the remote entry becomes our base, nothing to do
+#   publish  the remote version is a prefix of the file: base adopted, the tail is a local change
+#   install  the file is a prefix of (or an older version of) the remote one: install it over the file
+#   conflict no relation: left as it is (forks: #20)
+#   retry    a segment could not be fetched: try again next cycle
+# CS_AGENT_INIT_ENTRY is the remote entry that matched, CS_AGENT_INIT_ILEN / _ISHA the part of the file it covers.
+cs_agent_init() {
+  local sid=$1 a=$2 f=$3 st L canon cf csz xsz rf e n i lines v1 sha size mt
+  local -a gzs=()
+  st=$(cs_agent_dir "$sid")
+  L=$(cs_complete_len "$f")
+  canon="$CS_HOME/staging/ainit.$sid.$a.canon"
+  cf="$CS_HOME/staging/ainit.$sid.$a.cand"
+  head -c "$L" -- "$f" | cs_transform canon "$CS_ROWS" >"$canon"
+  csz=$(stat -c %s -- "$canon")
+  sha=$(cs_sha256_hex "$canon")
+  v1=$(cs_cum_next "$(cs_cum0 "$sid/$a")" "$sha")
+  CS_AGENT_INIT=conflict CS_AGENT_INIT_ENTRY='' CS_AGENT_INIT_ILEN=0 CS_AGENT_INIT_ISHA=-
+  while IFS=$'\t' read -r n e; do
+    gzs=()
+    for ((i = 0; i < n; i++)); do
+      gzs+=("$(cs_eng_seg_fetch "$(cs_jq -c ".segs[$i]" <<<"$e")")") || break
+    done
+    if ((${#gzs[@]} != n)); then
+      CS_AGENT_INIT=retry
+      continue
+    fi
+    if ((n)); then gzip -dc -- "${gzs[@]}" >"$cf"; else : >"$cf"; fi
+    xsz=$(stat -c %s -- "$cf")
+    if ((xsz == csz)) && cmp -s -- "$canon" "$cf"; then
+      CS_AGENT_INIT=equal CS_AGENT_INIT_ILEN=$L
+    elif ((xsz < csz)) && head -c "$xsz" -- "$canon" | cmp -s - "$cf"; then
+      lines=$(cs_jq -r .lines <<<"$e")
+      CS_AGENT_INIT=publish CS_AGENT_INIT_ILEN=$(head -n "$lines" -- "$f" | wc -c)
+    elif ((xsz > csz)) && head -c "$csz" -- "$cf" | cmp -s - "$canon"; then
+      CS_AGENT_INIT=install
+    elif cs_entry_is_ancestor "$e" "$v1"; then
+      CS_AGENT_INIT=install
+    else
+      continue
+    fi
+    CS_AGENT_INIT_ENTRY=$e
+    break
+  done < <(for rf in "$CS_HOME"/state/remote/*.json; do
+    [[ -f $rf ]] || continue
+    e=$(cs_jq -c --arg s "$sid" --arg a "$a" '.sessions[$s].subagents[$a] // empty' "$rf")
+    [[ -n $e ]] && printf '%s\t%s\n' "$(cs_jq '.segs | length' <<<"$e")" "$e"
+    true
+  done | sort -t$'\t' -k1,1nr -s)
+  rm -f -- "$canon" "$cf"
+  case $CS_AGENT_INIT in
+    equal | publish)
+      # The base is the remote entry; for a local tail the file looks changed, so that it is published.
+      CS_AGENT_INIT_ISHA=$(cs_sha256_range "$f" 0 "$CS_AGENT_INIT_ILEN")
+      cs_write_atomic "$st/$a.json" printf '%s\n' "$CS_AGENT_INIT_ENTRY"
+      if [[ $CS_AGENT_INIT == equal ]]; then read -r size mt < <(stat -c '%s %Y' -- "$f"); else size=-1 mt=-1; fi
+      printf '%s %s %s %s\n' "$CS_AGENT_INIT_ILEN" "$CS_AGENT_INIT_ISHA" "$size" "$mt" >"$st/$a.rec"
+      ;;
+  esac
+  return 0
+}
+
 # cs_agent_sync SID DIR: for every agent of the session (local files and other machines' entries): publish local
 # changes as segments, install newer remote versions.
 cs_agent_sync() {
@@ -431,7 +496,12 @@ cs_agent_sync() {
         continue
       fi
       if ((exists && changed)); then
-        cs_log info "run: subagent $a of $sid exists here and elsewhere without a base; deferred"
+        cs_agent_init "$sid" "$a" "$f"
+        case $CS_AGENT_INIT in
+          publish) cs_agent_publish "$sid" "$a" "$f" "$CS_AGENT_INIT_ENTRY" "$CS_AGENT_INIT_ILEN" "$CS_AGENT_INIT_ISHA" || cs_eng_note_drv $? ;;
+          install) cs_agent_install "$sid" "$dir" "$a" "$CS_AGENT_INIT_ENTRY" '' 0 || cs_eng_note_drv $? ;;
+          conflict) cs_log info "run: subagent $a of $sid differs from the copy elsewhere and has no base; deferred (forks: #20)" ;;
+        esac
         continue
       fi
       cs_agent_install "$sid" "$dir" "$a" "$cand" "$ours" "$ilen" || cs_eng_note_drv $?
