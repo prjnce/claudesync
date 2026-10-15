@@ -3,7 +3,9 @@
 # `conflicts` command. Every machine computes the same winner from the two canonical contents; only the machine
 # that owns the losing branch creates a separate session for it, so no machine acts on another's files.
 #   fork point  the first canonical line that differs
-#   chat line   type is user, assistant, attachment, system or unknown; the rest is metadata (CS_META_TYPES)
+#   chat line   type is user, assistant, attachment, system or unknown; the rest is metadata (CS_META_TYPES).
+#               What Claude writes when it only reopens a session is not chat either: hook attachments (hook_*) and
+#               the synthetic user line of a <task-notification>. A branch made of that alone is no work to keep.
 #   winner      the branch whose first chat line after the fork point has the earlier timestamp; a tie goes to the
 #               lower machine_id; a branch without chat lines after the fork point loses, with no separate session
 #   fork_sid    a v4-shaped UUID from sha256(sid + uuid of the loser's first chat line after the fork point)
@@ -12,7 +14,7 @@
 [[ -n ${CS_FORK_LOADED:-} ]] && return 0
 CS_FORK_LOADED=1
 
-CS_META_TYPES=${CS_META_TYPES:-"last-prompt custom-title ai-title agent-name tag permission-mode file-history-snapshot file-history-delta attribution-snapshot queue-operation summary relocated mode worktree-state pr-link bridge-session content-replacement"}
+CS_META_TYPES=${CS_META_TYPES:-"last-prompt custom-title ai-title agent-name tag permission-mode file-history-snapshot file-history-delta attribution-snapshot queue-operation summary relocated mode worktree-state pr-link bridge-session content-replacement cost-state atis-latch frame-link artifact-comment-monitor artifact-autoreact-ledger history-suppression"}
 
 # cs_fork_sid SID UUID: UUID in v4 shape from sha256(SID + UUID).
 cs_fork_sid() {
@@ -22,11 +24,15 @@ cs_fork_sid() {
 }
 
 # cs_fork_first_chat FILE FROM_LINE: the line number (within FILE, from FROM_LINE on) of the first chat line; 0 if none.
+# t is the first "type" of the line: for an attachment that is the attachment's own type (hook_success, ...), written
+# before the line's "type":"attachment".
 cs_fork_first_chat() {
   tail -n +"$2" -- "$1" | LC_ALL=C "$CS_AWK" -v meta="$CS_META_TYPES" -v from="$2" '
     BEGIN { n = split(meta, a, " "); for (i = 1; i <= n; i++) m[a[i]] = 1 }
     { t = ""; if (match($0, /"type":"[^"]*"/)) t = substr($0, RSTART + 8, RLENGTH - 9)
-      if (!(t in m) && !found) { first = NR + from - 1; found = 1 } }
+      if (t in m || t ~ /^hook_/) next
+      if (t == "user" && $0 ~ /"content":"<task-notification>/) next
+      if (!found) { first = NR + from - 1; found = 1 } }
     END { print (found ? first : 0) }'
 }
 
@@ -169,6 +175,18 @@ cs_fork_man_forked() { # SID LOSING_VERSION FORK_SID
   cs_eng_my_manifest_save "$(cs_jq -c --arg s "$1" --arg v "$2" --arg f "$3" '.sessions[$s].forked[$v] = $f' <<<"$(cs_eng_my_manifest)")"
 }
 
+# cs_fork_title FILE: the title the session shows, as the text of a JSON string (escapes kept): the last customTitle
+# (a /rename), else the last aiTitle (Claude's own), else "(untitled)". A customTitle hides the aiTitle, so the
+# conflict title must carry the real one.
+cs_fork_title() {
+  local k t=''
+  for k in customTitle aiTitle; do
+    t=$(grep -a -o -E "\"$k\":\"([^\"\\\\]|\\\\.)*\"" -- "$1" | tail -n 1 | sed "s/^\"$k\":\"//;s/\"\$//") || t=''
+    [[ -n $t ]] && break
+  done
+  printf '%s\n' "${t:-(untitled)}"
+}
+
 # cs_fork_materialize SID FORK FILE DIR PID WINNER_ENTRY: the losing branch as a session of its own.
 cs_fork_materialize() {
   local sid=$1 fork=$2 f=$3 dir=$4 pid=$5 pd cc title slug nslug mt wmt tmp d x
@@ -177,8 +195,7 @@ cs_fork_materialize() {
   for x in "$CS_PDIR"/*/"$fork.jsonl"; do
     [[ -f $x ]] && return 0 # already there: running again creates nothing
   done
-  title=$(grep -a -o '"customTitle":"[^"]*"' -- "$f" | tail -n 1 | sed 's/^"customTitle":"//;s/"$//') || title=''
-  [[ -n $title ]] || title='(untitled)'
+  title=$(cs_fork_title "$f")
   slug=$(grep -a -o -m1 '"slug":"[A-Za-z0-9._-]*"' -- "$f" | head -n 1 | sed 's/^"slug":"//;s/"$//') || slug=''
   nslug=''
   [[ -n $slug ]] && nslug="$slug-c${fork:0:4}"

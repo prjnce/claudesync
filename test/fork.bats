@@ -117,6 +117,75 @@ forks_of() { echo $(($(ls "$SIM/$1"/claude/projects/*/ | grep -c '^[0-9a-f]\{8\}
   [ "$(forks_of C)" -eq 1 ]
 }
 
+# What Claude appends when a session is only reopened: resume hook attachment, the synthetic task-notification user
+# line, bridge-session, cost-state, atis-latch (no prompt, no answer).
+reopen_lines() { # TIMESTAMP
+  printf '%s\n' \
+    '{"parentUuid":"u0","isSidechain":false,"attachment":{"type":"hook_cancelled","hookName":"SessionStart:resume"},"type":"attachment","uuid":"hk1","timestamp":"'"$1"'","sessionId":"'"$SID"'"}' \
+    '{"parentUuid":"hk1","isSidechain":false,"type":"user","message":{"role":"user","content":"<task-notification>\n<task-id>t1</task-id>\n</task-notification>"},"uuid":"tn1","timestamp":"'"$1"'","sessionId":"'"$SID"'"}' \
+    '{"type":"bridge-session","sessionId":"'"$SID"'","bridgeSessionId":"cse_1"}' \
+    '{"type":"cost-state","sessionId":"'"$SID"'","totalCostUSD":0}' \
+    '{"type":"atis-latch","atis":"","sessionId":"'"$SID"'"}'
+}
+
+@test "a branch that only reopened the session loses without a separate session, even when it is the earlier one" {
+  shared_start
+  reopen_lines 2026-10-08T01:00:00Z >>"$B_FILE"
+  printf '%s\n' "$(line "$CROOT" uc 2026-10-08T02:00:00Z)" >>"$C_FILE"
+  for m in B C B C B C; do sim_run "$m" >/dev/null; done
+  # C's real line wins on both machines; B's reopening is saved as a backup, not as a session
+  [ "$(grep -c uc "$B_FILE")" -eq 1 ]
+  [ "$(grep -c tn1 "$B_FILE")" -eq 0 ]
+  [ "$(forks_of B)" -eq 0 ]
+  [ "$(forks_of C)" -eq 0 ]
+  [ "$(sim_canon B "$B_FILE")" = "$(sim_canon C "$C_FILE")" ]
+  [ -n "$(ls "$SIM/B/home/.claude-sync/backups" | grep fork-)" ]
+}
+
+@test "two machines that both only reopened the session make no separate session" {
+  shared_start
+  reopen_lines 2026-10-08T01:00:00Z >>"$B_FILE"
+  reopen_lines 2026-10-08T02:00:00Z | sed 's/hk1/hk2/;s/tn1/tn2/' >>"$C_FILE"
+  for m in B C B C B C; do sim_run "$m" >/dev/null; done
+  [ "$(forks_of B)" -eq 0 ]
+  [ "$(forks_of C)" -eq 0 ]
+  [ "$(sim_canon B "$B_FILE")" = "$(sim_canon C "$C_FILE")" ]
+}
+
+@test "a task-notification followed by an answer is real work: it is not swallowed as a reopening" {
+  shared_start
+  {
+    reopen_lines 2026-10-08T01:00:00Z
+    printf '%s\n' '{"type":"assistant","uuid":"as1","parentUuid":"tn1","timestamp":"2026-10-08T01:00:05Z","sessionId":"'"$SID"'"}'
+  } >>"$B_FILE"
+  printf '%s\n' "$(line "$CROOT" uc 2026-10-08T02:00:00Z)" >>"$C_FILE"
+  for m in B C B C B C; do sim_run "$m" >/dev/null; done
+  # B's answer is the earlier chat line: B wins, and C's later work lives on as a separate session
+  [ "$(grep -c as1 "$B_FILE")" -eq 1 ]
+  [ "$(grep -c uc "$B_FILE")" -eq 0 ]
+  fork=$(sim_exec C 'cs_fork_sid "$1" uc' "$SID" | tr -d '\r')
+  [ -n "$(sim_find C "$fork")" ]
+}
+
+@test "the conflict title is the session's aiTitle when it has no customTitle, and a customTitle wins over it" {
+  sim_write B "$BSLUG" "$SID" "$(line "$BROOT" u0 2026-10-08T00:00:00Z)" '{"type":"ai-title","aiTitle":"Auto \"quoted\" title","sessionId":"'"$SID"'"}'
+  local m
+  for m in B C B C; do sim_run "$m" >/dev/null; done
+  diverge 2026-10-08T01:00:00Z 2026-10-08T02:00:00Z
+  for m in B C B C B C; do sim_run "$m" >/dev/null; done
+  fork=$(sim_exec C 'cs_fork_sid "$1" uc' "$SID" | tr -d '\r')
+  ff=$(sim_find C "$fork")
+  [ -n "$ff" ]
+  [ "$(tail -n 1 "$ff" | jq -r .customTitle)" = '[conflict C] Auto "quoted" title' ]
+  # a /rename hides the aiTitle in Claude, so it is the title to carry
+  printf '%s\n' '{"type":"custom-title","customTitle":"My name","sessionId":"'"$SID"'"}' >"$BATS_TEST_TMPDIR/t.jsonl"
+  [ "$(sim_exec C 'cs_fork_title "$1"' "$BATS_TEST_TMPDIR/t.jsonl" | tr -d '\r')" = 'My name' ]
+  printf '%s\n' '{"type":"ai-title","aiTitle":"Auto","sessionId":"x"}' '{"type":"custom-title","customTitle":"My name","sessionId":"x"}' >"$BATS_TEST_TMPDIR/t.jsonl"
+  [ "$(sim_exec C 'cs_fork_title "$1"' "$BATS_TEST_TMPDIR/t.jsonl" | tr -d '\r')" = 'My name' ]
+  : >"$BATS_TEST_TMPDIR/t.jsonl"
+  [ "$(sim_exec C 'cs_fork_title "$1"' "$BATS_TEST_TMPDIR/t.jsonl" | tr -d '\r')" = '(untitled)' ]
+}
+
 @test "a branch that only differs in metadata loses without a separate session" {
   shared_start
   printf '%s
