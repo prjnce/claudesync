@@ -5,7 +5,7 @@
 [[ -n ${CS_CORE_LOADED:-} ]] && return 0
 CS_CORE_LOADED=1
 
-CS_VERSION=0.1.0-rc2
+CS_VERSION=0.1.0-rc3
 
 # Exit codes (SPEC §20).
 CS_EXIT_OK=0
