@@ -43,6 +43,9 @@ Path được dịch giữa các máy: session mở trong `D:\Projects\TransFlow
   lẫn registry session đang chạy của Claude không thay đổi trong lúc đó. Session đang mở không bao giờ bị
   ghi đè. Không có gì bị xoá vĩnh viễn trên Drive.
 
+Xem thêm: [sơ đồ đồng bộ history giữa các máy](SYNC-DIAGRAM.vi.md) và
+[hướng dẫn cài đặt máy thứ hai](SECOND-MACHINE.vi.md).
+
 ## Yêu cầu
 
 | | Windows | Ubuntu / WSL |

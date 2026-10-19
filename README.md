@@ -44,6 +44,9 @@ with `curl` — no daemon, no rclone, no server of its own.
   neither the file nor Claude's running-session registry changed meanwhile. Open sessions are never
   overwritten. Nothing is ever deleted permanently on Drive.
 
+More detail: [how history is synced between machines](SYNC-DIAGRAM.md) (diagrams) and
+[setting up a second machine](SECOND-MACHINE.md).
+
 ## Requirements
 
 | | Windows | Ubuntu / WSL |
