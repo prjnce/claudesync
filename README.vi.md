@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/logo.png" alt="claude-sync" width="160"></p>
+<p align="center"><img src="logo.png" alt="claude-sync" width="160"></p>
 
 <h1 align="center">claude-sync</h1>
 
@@ -42,8 +42,6 @@ Path được dịch giữa các máy: session mở trong `D:\Projects\TransFlow
 - **Ghi an toàn.** Khi cài, công cụ ghi file tạm, kiểm tra, rồi chỉ đổi tên đè lên file đích nếu cả file
   lẫn registry session đang chạy của Claude không thay đổi trong lúc đó. Session đang mở không bao giờ bị
   ghi đè. Không có gì bị xoá vĩnh viễn trên Drive.
-
-Thiết kế đầy đủ nằm trong [docs/SPEC.md](docs/SPEC.md).
 
 ## Yêu cầu
 
@@ -196,7 +194,6 @@ lib/*.sh               các module (core, platform, claude, transform, drive/gdr
 lib/transform.awk      dịch path chính xác đến từng byte (POSIX awk: mawk và gawk)
 test/*.bats            test bats-core (bats nằm sẵn trong test/vendor/)
 test/run-all.sh        thay CI khi chạy local: Git Bash + WSL (gawk và mawk) + shellcheck, chạy song song
-docs/SPEC.md           đặc tả; docs/research/ chứa các bằng chứng làm nền cho đặc tả
 ```
 
 ```bash

@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/logo.png" alt="claude-sync" width="160"></p>
+<p align="center"><img src="logo.png" alt="claude-sync" width="160"></p>
 
 <h1 align="center">claude-sync</h1>
 
@@ -43,8 +43,6 @@ with `curl` — no daemon, no rclone, no server of its own.
 - **Safe writes.** Installs write a temporary file, check it, then rename it over the target only if
   neither the file nor Claude's running-session registry changed meanwhile. Open sessions are never
   overwritten. Nothing is ever deleted permanently on Drive.
-
-The full design is in [docs/SPEC.md](docs/SPEC.md) (Vietnamese).
 
 ## Requirements
 
@@ -199,7 +197,6 @@ lib/*.sh               modules (core, platform, claude, transform, drive/gdrive/
 lib/transform.awk      byte-exact path rewriting (POSIX awk: mawk and gawk)
 test/*.bats            bats-core tests (vendored in test/vendor/)
 test/run-all.sh        local stand-in for CI: Git Bash + WSL (gawk and mawk) + shellcheck, in parallel
-docs/SPEC.md           the specification; docs/research/ holds the evidence behind it
 ```
 
 ```bash
